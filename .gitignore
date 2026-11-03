@@ -24,6 +24,8 @@ data/raw/
 *.webp
 !docs/assets/*.png
 !docs/assets/*.jpg
+# Application brand marks are part of the interface (vector only)
+!assets/*.svg
 # Evaluation plots are small, non-sensitive and useful in the repo
 !metrics/curves/*.png
 

@@ -17,16 +17,14 @@ from app.ui.icons import svg
 __all__ = [
     "PILL_TONES",
     "bullets",
-    "panel",
     "empty_state",
     "kv_row",
     "meta",
     "note",
     "page_header",
     "section",
-    "spacer",
     "status_pill",
-    "tiles",
+    "steps",
 ]
 
 PILL_TONES = {"ok": "jd-pill--ok", "warn": "jd-pill--warn", "muted": "jd-pill--muted"}
@@ -47,14 +45,19 @@ def page_header(
     eyebrow_icon: str = "scan",
     status: tuple[str, str] | None = None,
 ) -> None:
-    """Page title block: eyebrow, title, one-line subtitle, optional status pill."""
+    """Page title block: optional eyebrow, title, one-line subtitle."""
     pill = f"<div>{status_pill(*status)}</div>" if status else ""
     subtitle_html = f'<p class="jd-sub">{escape(subtitle)}</p>' if subtitle else ""
+    eyebrow_html = (
+        f'<div class="jd-eyebrow">{svg(eyebrow_icon, 13)}{escape(eyebrow)}</div>'
+        if eyebrow
+        else ""
+    )
     _html(
         '<div class="jd-head">'
         '<div class="jd-head-row">'
         "<div>"
-        f'<div class="jd-eyebrow">{svg(eyebrow_icon, 13)}{escape(eyebrow)}</div>'
+        f"{eyebrow_html}"
         f'<h1 class="jd-h1">{escape(title)}</h1>'
         f"{subtitle_html}"
         "</div>"
@@ -65,7 +68,7 @@ def page_header(
 
 
 def section(title: str, subtitle: str | None = None) -> None:
-    """Section divider with a short caption."""
+    """Section divider with an optional short caption."""
     sub = f'<p class="jd-section__sub">{escape(subtitle)}</p>' if subtitle else ""
     _html(
         f'<div class="jd-section"><p class="jd-section__title">{escape(title)}</p>{sub}</div>'
@@ -90,7 +93,7 @@ def note(text: str, *, tone: str = "info", icon: str = "info") -> None:
 
 
 def empty_state(*, icon: str, title: str, body: str) -> None:
-    """Purposeful empty state: says what is missing and why it is empty."""
+    """Purposeful empty state: says what is missing and what to do next."""
     _html(
         '<div class="jd-empty">'
         f'<div class="jd-empty__icon">{svg(icon, 17)}</div>'
@@ -100,21 +103,21 @@ def empty_state(*, icon: str, title: str, body: str) -> None:
     )
 
 
-def tiles(items: Sequence[tuple[str, str, str]]) -> None:
-    """Responsive grid of (icon, title, body) capability tiles."""
-    cards = "".join(
-        '<div class="jd-tile">'
-        f'<div class="jd-tile__icon">{svg(icon_name, 17)}</div>'
-        f'<p class="jd-tile__title">{escape(title)}</p>'
-        f'<p class="jd-tile__body">{escape(body)}</p>'
+def steps(items: Sequence[tuple[str, str]]) -> None:
+    """Numbered how-it-works list of (title, description) pairs."""
+    rendered = "".join(
+        '<div class="jd-step">'
+        f'<div class="jd-step__num">{index}</div>'
+        f'<div class="jd-step__text"><b>{escape(title)}</b> — {escape(body)}</div>'
         "</div>"
-        for icon_name, title, body in items
+        for index, (title, body) in enumerate(items, start=1)
     )
-    _html(f'<div class="jd-grid">{cards}</div>')
+    _html(f'<div class="jd-steps">{rendered}</div>')
+
 
 
 def bullets(items: Sequence[str]) -> None:
-    """Tight bulleted list for limitations and capability summaries."""
+    """Tight bulleted list for limitations and privacy notes."""
     rendered = "".join(f"<li>{escape(item)}</li>" for item in items)
     _html(f'<ul class="jd-list">{rendered}</ul>')
 
@@ -131,20 +134,3 @@ def kv_row(items: Sequence[tuple[str, str]]) -> None:
 def meta(text: str) -> None:
     """Dim single line of context under a component."""
     _html(f'<p class="jd-meta">{escape(text)}</p>')
-
-
-def spacer(rem: float = 0.6) -> None:
-    _html(f'<div style="height:{float(rem):.2f}rem"></div>')
-
-
-# --------------------------------------------------------------------------
-# Layout
-# --------------------------------------------------------------------------
-def panel(*parts: str) -> None:
-    """Render pre-built markup inside a bordered panel.
-
-    A plain HTML wrapper is used rather than `st.container(border=True)` because
-    bordered-container internals differ between Streamlit releases; this keeps the
-    card appearance stable.
-    """
-    _html(f'<div class="jd-panel">{"".join(parts)}</div>')

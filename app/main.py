@@ -5,7 +5,8 @@ Run locally with:
     streamlit run app/main.py
 
 Navigation is declared in `app/ui/nav.py`; each page is a `render()` callable in
-`app/views/`.
+`app/views/`. End users see Detect, Camera and Help. The developer page is hidden
+from the navigation and reachable only at `/developer`.
 """
 
 from __future__ import annotations
@@ -20,27 +21,32 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.components.model_sidebar import render_sidebar_status  # noqa: E402
-from app.ui.nav import PAGES  # noqa: E402
+from app.ui.nav import build_pages  # noqa: E402
 
 __all__ = ["main"]
+
+LOGO_PATH = PROJECT_ROOT / "assets" / "logo.svg"
+MARK_PATH = PROJECT_ROOT / "assets" / "mark.svg"
 
 
 def main() -> None:
     st.set_page_config(
         page_title="JUDEtector",
+        page_icon=str(MARK_PATH) if MARK_PATH.is_file() else None,
         layout="wide",
-        initial_sidebar_state="expanded",
+        initial_sidebar_state="auto",
     )
 
-    # Each page applies the shared stylesheet, so the theme travels with the page
-    # rather than leaking from the entry point.
+    # The wordmark sits above the navigation; the sidebar itself carries nothing
+    # but navigation and one privacy line, so the product stays task-focused.
+    if LOGO_PATH.is_file():
+        st.logo(str(LOGO_PATH), size="large", icon_image=str(MARK_PATH))
 
-    # The navigation block renders at the top of the sidebar; the read-only model
-    # status sits beneath it. Model *controls* deliberately live on the workspace
-    # pages, not in the navigation rail.
-    page = st.navigation(PAGES)
-    render_sidebar_status()
+    page = st.navigation(build_pages())
+
+    with st.sidebar:
+        st.caption("Images are analysed in memory and never stored.")
+
     page.run()
 
 

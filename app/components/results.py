@@ -1,4 +1,9 @@
-"""Presentation of a detection result: counts, confidence scores, table, export.
+"""Presentation of a detection result.
+
+The primary view is deliberately small: how many detections, how confident, the
+images and the download. Coordinates, applied thresholds and timing are real
+measurements but of little use to someone who just wants the annotated image, so
+they live in one collapsed section.
 
 All values come from the `DetectionResult` produced by the detector; this module
 only formats them.
@@ -11,58 +16,23 @@ import streamlit as st
 
 from app.core.detector import DetectionResult
 from app.core.image_io import to_png_bytes
-from app.core.registry import ModelSpec
-from app.ui.components import meta, note
+from app.ui.components import kv_row, meta, note, section
 
 __all__ = [
-    "render_detection_table",
+    "render_detection_details",
     "render_download_button",
     "render_no_detections_note",
-    "render_summary_metrics",
+    "render_result_summary",
 ]
 
 
-def render_summary_metrics(result: DetectionResult, spec: ModelSpec) -> None:
-    """Headline numbers, derived solely from the inference result."""
+def render_result_summary(result: DetectionResult) -> None:
+    """Two headline numbers, derived solely from the inference result."""
     mean_conf = result.mean_confidence
-    columns = st.columns(4, gap="small")
+    columns = st.columns(2, gap="small")
     columns[0].metric("Detections", result.count)
     columns[1].metric(
         "Mean confidence", f"{mean_conf:.1%}" if mean_conf is not None else "—"
-    )
-    columns[2].metric(
-        "Confidence range",
-        (
-            f"{result.min_confidence:.2f} – {result.max_confidence:.2f}"
-            if result.min_confidence is not None and result.max_confidence is not None
-            else "—"
-        ),
-    )
-    columns[3].metric("Inference time", f"{result.inference_ms:.0f} ms")
-    meta(
-        f"{spec.display_name} · confidence ≥ {result.confidence_threshold:.2f} · "
-        f"IoU {result.iou_threshold:.2f} · "
-        f"labels: {', '.join(result.labels_present) if result.labels_present else 'none'}"
-    )
-
-
-def render_detection_table(result: DetectionResult) -> None:
-    """Per-detection confidence scores, most confident first."""
-    if not result.detections:
-        return
-    records = sorted(result.records(), key=lambda row: row["confidence"], reverse=True)
-    st.dataframe(
-        pd.DataFrame(records),
-        hide_index=True,
-        width="stretch",
-        column_config={
-            "label": "class",
-            "confidence": st.column_config.NumberColumn("confidence", format="%.4f"),
-            "x1": st.column_config.NumberColumn("x1 (px)", format="%.1f"),
-            "y1": st.column_config.NumberColumn("y1 (px)", format="%.1f"),
-            "width": st.column_config.NumberColumn("width (px)", format="%.1f"),
-            "height": st.column_config.NumberColumn("height (px)", format="%.1f"),
-        },
     )
 
 
@@ -70,11 +40,47 @@ def render_no_detections_note(result: DetectionResult) -> None:
     if result.count:
         return
     note(
-        f"No detections above the confidence threshold ({result.confidence_threshold:.2f}). "
-        "Lower the threshold to include weaker candidates. A single-class model returns "
-        "nothing for images that do not contain its subject.",
+        "Nothing matched at this confidence level. Lower the confidence threshold in "
+        "Advanced settings to include weaker matches, or try a clearer photo.",
         icon="info",
     )
+
+
+def render_detection_details(result: DetectionResult) -> None:
+    """Collapsed technical detail: applied settings, timing and per-box rows."""
+    with st.expander("Detection details", expanded=False):
+        range_text = (
+            f"{result.min_confidence:.2f} – {result.max_confidence:.2f}"
+            if result.min_confidence is not None and result.max_confidence is not None
+            else "—"
+        )
+        kv_row(
+            [
+                ("Confidence threshold", f"{result.confidence_threshold:.2f}"),
+                ("Overlap (IoU)", f"{result.iou_threshold:.2f}"),
+                ("Confidence range", range_text),
+                ("Processing time", f"{result.inference_ms:.0f} ms"),
+            ]
+        )
+        if not result.detections:
+            meta("No boxes were produced for this image.")
+            return
+
+        section("Detected items")
+        records = sorted(result.records(), key=lambda row: row["confidence"], reverse=True)
+        st.dataframe(
+            pd.DataFrame(records),
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "label": "class",
+                "confidence": st.column_config.NumberColumn("confidence", format="%.4f"),
+                "x1": st.column_config.NumberColumn("x1 (px)", format="%.1f"),
+                "y1": st.column_config.NumberColumn("y1 (px)", format="%.1f"),
+                "width": st.column_config.NumberColumn("width (px)", format="%.1f"),
+                "height": st.column_config.NumberColumn("height (px)", format="%.1f"),
+            },
+        )
 
 
 def render_download_button(processed_image, filename: str) -> None:
