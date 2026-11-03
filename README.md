@@ -62,6 +62,20 @@ streamlit run app/main.py
 Open <http://localhost:8501>. The app starts fully without the ML stack; detection
 becomes available once weights and the optional packages are installed.
 
+#### Serving from a tunnel, container or preview domain
+
+Streamlit refuses WebSocket connections whose `Origin` does not match the address
+the app is bound to, which shows up as a blank page behind a proxy. Allow your
+origin explicitly:
+
+```bash
+streamlit run app/main.py --server.corsAllowedOrigins=https://your-app.example.com
+```
+
+Only if your proxy rewrites origins and you cannot set the allow-list, fall back to
+`--server.enableCORS false`. That accepts a WebSocket from any origin, so use it for
+trusted, short-lived preview environments rather than public deployments.
+
 ### Enable detection
 
 ```bash
