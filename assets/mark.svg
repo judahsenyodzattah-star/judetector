@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="JUDEtector">
-  <rect width="64" height="64" rx="16" fill="#0F766E"/>
-  <g fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M17 27v-5a5 5 0 0 1 5-5h5"/>
-    <path d="M42 17h5a5 5 0 0 1 5 5v5"/>
-    <path d="M52 37v5a5 5 0 0 1-5 5h-5"/>
-    <path d="M22 47h-5a5 5 0 0 1-5-5v-5"/>
-    <line x1="23" y1="32" x2="41" y2="32"/>
+  <rect width="64" height="64" rx="2" fill="#16181A"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="square">
+    <path d="M16 24v-8h8"/>
+    <path d="M40 16h8v8"/>
+    <path d="M48 40v8h-8"/>
+    <path d="M24 48h-8v-8"/>
   </g>
+  <line x1="20" y1="32" x2="44" y2="32" stroke="#8A5A00" stroke-width="4" stroke-linecap="square"/>
 </svg>

@@ -8,10 +8,36 @@ gatherUsageStats = false
 [client]
 toolbarMode = "minimal"
 
+# Theme tokens mirror app/ui/theme.py. As much of the design language as possible
+# lives here, where Streamlit applies it to its own widgets consistently.
 [theme]
 base = "light"
-primaryColor = "#0F766E"
-backgroundColor = "#FAFAF8"
+primaryColor = "#8A5A00"
+backgroundColor = "#F4F2ED"
 secondaryBackgroundColor = "#FFFFFF"
-textColor = "#15181A"
+textColor = "#16181A"
+borderColor = "#52585C"
+baseRadius = "2px"
+buttonRadius = "2px"
+baseFontSize = 15
 font = "sans serif"
+headingFont = "sans serif"
+codeFont = "monospace"
+codeBackgroundColor = "#EFECE4"
+codeTextColor = "#16181A"
+grayColor = "#52585C"
+grayBackgroundColor = "#F4F2ED"
+grayTextColor = "#52585C"
+linkColor = "#8A5A00"
+linkUnderline = true
+showWidgetBorder = true
+dataframeBorderColor = "#D0CBC1"
+dataframeHeaderBackgroundColor = "#F4F2ED"
+dataframeHeaderTextColor = "#52585C"
+showSidebarBorder = true
+headingFontSizes = ["38px", "24px", "17px", "15px", "15px", "14px"]
+headingFontWeights = [600, 600, 600, 600, 600, 600]
+
+[theme.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F4F2ED"
