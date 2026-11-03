@@ -66,19 +66,33 @@ in about two seconds.
   by face count, and count empty runs separately.
 
 ### Interface — `tests/test_app_smoke.py`
-- The entry point renders; every page renders without exception.
-- Detect page exposes an uploader plus confidence/IoU sliders.
+- The entry point opens Detect; every page renders without exception.
+- Navigation is exactly Detect, Camera, Help, with SVG (non-emoji) icons; the
+  developer page is hidden from that list and routable at `/developer`.
+- Detect exposes an uploader; thresholds live in one collapsed *Advanced settings*
+  panel; nothing is analysed until *Analyse image* is pressed.
 - **End-to-end:** an uploaded image with a fake model produces `Detections = 2`,
-  mean confidence `76.5%`, a confidence range, two displayed images, a download
-  button, and a recorded session run.
-- **Honesty test:** with weights missing, an upload yields an error and **zero**
-  metrics, no download button and no recorded run.
-- Dashboard shows "No evaluation metrics recorded" and no metric widgets when no
+  mean confidence `76.5%`, three displayed images (preview, original, annotated),
+  a download button, and a recorded session run.
+- **Honesty test:** without weights, pressing *Analyse image* shows
+  "Image analysis is temporarily unavailable", **zero** metrics, no download, no
+  recorded run and no technical vocabulary. The underlying cause is asserted to be
+  present in `session_state["last_analysis_error"]` and on the developer page.
+- Developer page shows "No evaluation metrics recorded" and no metric widgets when no
   record exists; a fixture record displays `0.8340 / 0.8100 / 0.7900` verbatim;
   an invalid record raises a visible error.
-- The subject-specific scope warning is present on working pages.
-- About page carries the student details, dataset scope and the
-  detection-is-not-recognition statement.
+- Help carries the three-step workflow, the privacy statement and the
+  detection-is-not-recognition limitation.
+
+### Styles — `tests/test_ui_styles.py`
+- Every text/background token pair meets WCAG AA (4.5:1); the uploader border meets
+  the 3:1 non-text threshold.
+- The uploader uses a neutral surface, never a saturated fill, and defines hover,
+  focus and disabled states.
+- Every `data-testid` in the stylesheet is asserted against the installed Streamlit
+  bundle, so a Streamlit upgrade that renames a hook fails the suite instead of
+  silently dropping styles.
+- `.streamlit/config.toml` colours must match the design tokens.
 
 ### Repository hygiene — `tests/test_repo_hygiene.py`
 - `.gitignore` covers `*.pt`, `*.onnx`, `datasets/`, `runs/`, secrets.
@@ -89,7 +103,7 @@ in about two seconds.
 ## Current result
 
 ```
-144 passed
+178 passed
 ```
 
 Test counts by module are reported in the pull request. UI tests are marked `ui` and

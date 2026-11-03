@@ -94,13 +94,14 @@ Full procedure and troubleshooting: [`docs/MODEL_INTEGRATION.md`](docs/MODEL_INT
 
 ## Application sections
 
+The application opens directly on **Detect**: the whole product is one workflow.
+
 | Page | Purpose |
 |---|---|
-| **Overview** | Landing workspace: primary actions, model connection status, capabilities and recent activity |
-| **Detect** | Image upload, collapsible threshold settings, boxes, detection count, per-detection confidence table, annotated-image download |
-| **Camera** | Browser camera snapshot → the same detection pipeline (single frames per capture; no live video) |
-| **Analytics** | Recorded evaluation results, session detection statistics, and model/dataset detail behind an expander |
-| **About** | Product capabilities, privacy guidance, and model limitations |
+| **Detect** (default) | Upload an image → *Analyse image* → count, mean confidence, original and annotated images, annotated-image download. Confidence/overlap thresholds sit in a collapsed **Advanced settings** panel. |
+| **Camera** | Browser snapshot → the same pipeline, one still frame per capture (no live video) |
+| **Help** | How it works, what the numbers mean, privacy, honest limitations |
+| **Developer** (`/developer`, hidden) | Model resolution, weights paths, runtime availability, setup commands, dataset composition, recorded evaluation metrics, session activity |
 
 ### Interface
 
@@ -114,9 +115,17 @@ The interface is a small design system rather than per-page styling:
 - `app/ui/nav.py` — the five navigation entries, using Streamlit's own
   `st.navigation` with Material SVG icons (no emoji in navigation).
 
-Model controls live in a collapsible **Detection settings** panel on the workspace
-pages; the sidebar carries navigation plus a read-only model status, so technical
-controls never compete with navigation.
+The interface is split by audience. End users only ever see the workflow: no weights
+paths, dependency names, registry vocabulary, dataset statistics or evaluation
+configuration appear on Detect, Camera or Help. Those live on the developer page.
+
+That page is **hidden from the navigation, not protected by it** — Streamlit's
+`visibility="hidden"` hides a route; it does not authorise one. Open
+`/developer` directly, and restrict it at the hosting layer before any public
+deployment. Nothing in the interface claims access control.
+
+When inference is unavailable the user sees one plain line ("Image analysis is
+temporarily unavailable") while the technical cause is kept for the developer page.
 
 ---
 
@@ -126,8 +135,8 @@ controls never compete with navigation.
 judetector/
 ├── app/
 │   ├── main.py                  # entry point + navigation
-│   ├── views/                   # Home, Detect, Camera, Dashboard, About
-│   ├── components/              # shared UI: pipeline, results, status, model settings
+│   ├── views/                   # Detect, Camera, Help, Developer
+│   ├── components/              # shared UI: pipeline, workflow, results, settings
 │   ├── ui/                      # design system: theme, icons, components, navigation
 │   └── core/                    # Streamlit-free logic
 │       ├── config.py            # paths, defaults, env overrides
@@ -139,10 +148,11 @@ judetector/
 │       ├── image_io.py          # decode, guard, encode
 │       ├── errors.py            # domain errors
 │       └── runtime.py           # Streamlit-cached wiring
+├── assets/                      # brand marks used by the sidebar and favicon
 ├── config/models.json           # model registry (the swap point)
 ├── metrics/                     # evaluation records (none yet — by design)
 ├── models/                      # weights go here (git-ignored)
-├── tests/                       # 144 automated tests
+├── tests/                       # 178 automated tests
 └── docs/                        # proposal, integration guide, testing
 ```
 
@@ -190,7 +200,7 @@ its inverse (no weights ⇒ no detections). Details: [`docs/TESTING.md`](docs/TE
 **Model (`judah-face-v1`)** — a single-class Ultralytics detector for the subject
 `judah`, trained by the project author on the `judy-face-detection` dataset. It is
 **not** a validated general-purpose face detector. No metrics are recorded in this
-repository yet; the Dashboard reports that fact rather than filling the gap.
+repository yet; the developer page reports that fact rather than filling the gap.
 
 **Dataset (`judy-face-detection`, declared by the author)** — 711 images
 (675 annotated, 36 reserved for later annotation), one class `judah`, split
@@ -204,14 +214,14 @@ Evaluation numbers belong in `metrics/<model-id>.json` — see
 Detection is not recognition: JUDEtector locates objects, it does not identify
 people. Images should only be processed with the knowledge and consent of the
 people in them. Uploads are processed in memory and are not written to disk;
-session statistics store filenames and counts, not image content. See the About page
+session statistics store filenames and counts, not image content. See the Help page
 in the running app for the full statement.
 
 ## Roadmap
 
 - [x] **Milestone 1** — foundation, interface, modular detector integration, tests
 - [ ] **Milestone 2** — connect the trained `judah` model; verify labels and latency
-- [ ] **Milestone 3** — record real evaluation metrics; render curves on the Dashboard
+- [ ] **Milestone 3** — record real evaluation metrics; surface them on the developer page
 - [ ] **Milestone 4** — register a general-purpose face detector; compare models
 - [ ] **Milestone 5** — deployment, demo script and report evidence
 
