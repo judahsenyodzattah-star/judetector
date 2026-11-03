@@ -59,6 +59,23 @@ pip install -r requirements.txt
 streamlit run app/main.py
 ```
 
+**Windows (PowerShell)**
+
+```powershell
+git clone https://github.com/judahsenyodzattah-star/judetector.git
+Set-Location judetector
+
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+streamlit run app/main.py
+```
+
+> If PowerShell refuses to run `Activate.ps1`, see
+> [Windows notes (PowerShell)](#windows-notes-powershell).
+
 Open <http://localhost:8501>. The app starts fully without the ML stack; detection
 becomes available once weights and the optional packages are installed.
 
@@ -74,7 +91,140 @@ export JUDETECTOR_MODEL_PATH=/absolute/path/to/best.pt
 streamlit run app/main.py
 ```
 
+**Windows (PowerShell)**
+
+```powershell
+python -m pip install -r requirements-model.txt      # ultralytics + torch
+New-Item -ItemType Directory -Force -Path "models\judah-face-v1" | Out-Null
+Copy-Item -Path "C:\path\to\your\best.pt" -Destination "models\judah-face-v1\best.pt"
+# ...or leave the file where it is and point the app at it:
+$env:JUDETECTOR_MODEL_PATH = "C:\absolute\path\to\best.pt"
+
+streamlit run app/main.py
+```
+
 Full procedure and troubleshooting: [`docs/MODEL_INTEGRATION.md`](docs/MODEL_INTEGRATION.md).
+
+---
+
+## Windows notes (PowerShell)
+
+Bash is the reference shell in this documentation; everything below is the
+equivalent for Windows. Both are supported — the application code is
+platform-independent.
+
+### Activating the virtual environment
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+If Windows blocks the activation script:
+
+```text
+.\.venv\Scripts\Activate.ps1 : File ...\Activate.ps1 cannot be loaded because
+running scripts is disabled on this system.
+```
+
+Allow scripts for the current session only (safest, does not change machine policy):
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+…or persistently for your user account (affects every PowerShell window):
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+You can also skip activation entirely and call the interpreter directly:
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run app/main.py
+```
+
+### Environment variables
+
+PowerShell does not use `export`. `$env:` sets a variable **for the current
+window only**:
+
+```powershell
+$env:JUDETECTOR_MODEL_PATH = "C:\absolute\path\to\best.pt"
+$env:JUDETECTOR_REGISTRY   = "C:\absolute\path\to\models.json"
+$env:JUDETECTOR_METRICS_DIR = "C:\absolute\path\to\metrics"
+
+# verify
+$env:JUDETECTOR_MODEL_PATH
+
+# remove for this window
+Remove-Item Env:JUDETECTOR_MODEL_PATH -ErrorAction SilentlyContinue
+```
+
+To persist so **new** terminals inherit it (use `setx` for convenience, or the
+`Environment` API for control over the scope):
+
+```powershell
+setx JUDETECTOR_MODEL_PATH "C:\absolute\path\to\best.pt"
+
+# equivalent, explicit about scope ("User" or "Machine")
+[Environment]::SetEnvironmentVariable("JUDETECTOR_MODEL_PATH", "C:\absolute\path\to\best.pt", "User")
+
+# remove the persisted value
+[Environment]::SetEnvironmentVariable("JUDETECTOR_MODEL_PATH", $null, "User")
+```
+
+> `setx` and `SetEnvironmentVariable` only affect **processes started after**
+> the change. Close and reopen the terminal — the current window keeps the old
+> environment.
+
+### Paths inside `config/models.json`
+
+JSON treats a backslash as an escape character, so a raw Windows path will break
+the file:
+
+```json
+"weights": "C:\models\best.pt"        ← invalid JSON
+```
+
+Use **forward slashes** (works on Windows and is easiest to read):
+
+```json
+"weights": "C:/models/judah-face-v1/best.pt"
+```
+
+…or escape the backslashes:
+
+```json
+"weights": "C:\\models\\judah-face-v1\\best.pt"
+```
+
+Relative paths (`models/judah-face-v1/best.pt`) also work — they resolve against
+the repository root.
+
+### When `streamlit` is not recognised
+
+```text
+streamlit : The term 'streamlit' is not recognized as the name of a cmdlet, function, script file, or operable program.
+```
+
+The virtual environment is not active in that window. Either activate it, or invoke
+the module explicitly:
+
+```powershell
+python -m streamlit run app/main.py
+```
+
+### Common PowerShell errors
+
+| Error | Cause | Fix |
+|---|---|---|
+| `Activate.ps1 cannot be loaded because running scripts is disabled` | PowerShell execution policy | `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` |
+| `python` opens the Microsoft Store, or is not recognised | Windows App Execution Alias intercepted it | use `py -3`, or install Python from python.org and tick **Add python.exe to PATH** |
+| `streamlit : The term ... is not recognized` | venv not activated | `.\.venv\Scripts\Activate.ps1`, or `python -m streamlit run app/main.py` |
+| `Expecting property name enclosed in double quotes` when starting the app | unescaped `\` in `config/models.json` | use `/` or `\\` in paths |
+| `pip install` of `requirements-model.txt` is very slow / fails on disk space | PyTorch is large (multi-GB) | keep ~5 GB free, or install CPU-only torch first |
+| Camera page shows no video control | the browser blocked camera access | use `http://localhost:8501` or HTTPS, and allow the camera permission |
 
 ---
 
@@ -143,6 +293,14 @@ of raising into a stack trace.
 
 ```bash
 pip install -r requirements-dev.txt
+python -m pytest        # 144 passed
+ruff check .            # clean
+```
+
+PowerShell:
+
+```powershell
+python -m pip install -r requirements-dev.txt
 python -m pytest        # 144 passed
 ruff check .            # clean
 ```

@@ -3,6 +3,9 @@
 The application is built around a `Detector` interface, so connecting a model is a
 **configuration change**, not a code change.
 
+Bash commands are given first in each step; the PowerShell (Windows) equivalent
+follows. Both are supported — the application code is platform-independent.
+
 ---
 
 ## 1. Supply the weights
@@ -19,7 +22,15 @@ models/judah-face-v1/best.pt
 export JUDETECTOR_MODEL_PATH=/absolute/path/to/best.pt
 ```
 
-The override applies to the **default** model in the registry.
+PowerShell:
+
+```powershell
+$env:JUDETECTOR_MODEL_PATH = "C:\absolute\path\to\best.pt"
+```
+
+The override applies to the **default** model in the registry. On Windows, `$env:`
+applies to the current terminal window; to persist it, see
+[Setting environment variables](#setting-environment-variables).
 
 ## 2. Install the ML stack
 
@@ -30,10 +41,27 @@ Inference needs PyTorch + Ultralytics, which are kept out of the default
 pip install -r requirements-model.txt
 ```
 
+PowerShell:
+
+```powershell
+python -m pip install -r requirements-model.txt
+```
+
+> PyTorch is a multi-gigabyte download. Allow several minutes and keep a few
+> gigabytes of free disk space.
+
 ## 3. Restart and verify
 
 ```bash
 streamlit run app/main.py
+```
+
+PowerShell:
+
+```powershell
+streamlit run app/main.py
+# if 'streamlit' is not recognised:
+python -m streamlit run app/main.py
 ```
 
 The sidebar changes from **⚠️ weights missing** to **✅ weights found**. On the
@@ -41,6 +69,110 @@ first detection the model loads once and stays in memory. The class labels shown
 in the UI are read **from the model file itself** (`labels_source: model`), not
 from configuration — so a model trained with a different class name will display
 that name, not a guess.
+
+---
+
+## Windows (PowerShell) walkthrough
+
+A complete first-time setup, from a fresh Windows install to a running app with
+detection enabled.
+
+```powershell
+# 1. Get the code
+git clone https://github.com/judahsenyodzattah-star/judetector.git
+Set-Location judetector
+
+# 2. Create and activate a virtual environment
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+# If blocked: Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+# 3. Install the app (no PyTorch yet, so this is small and fast)
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+# 4. Confirm the app starts before touching the model
+streamlit run app/main.py
+#    -> sidebar should read "weights missing". Press Ctrl+C to continue.
+
+# 5. Supply the weights
+New-Item -ItemType Directory -Force -Path "models\judah-face-v1" | Out-Null
+Copy-Item -Path "C:\path\to\your\best.pt" -Destination "models\judah-face-v1\best.pt"
+
+# 6. Install the optional ML stack
+python -m pip install -r requirements-model.txt
+
+# 7. Run again
+streamlit run app/main.py
+#    -> sidebar should now read "weights found"
+```
+
+### Activating the virtual environment
+
+`.\.venv\Scripts\Activate.ps1`
+
+If PowerShell reports that running scripts is disabled, allow them for the current
+session only (does not change machine policy):
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+To skip activation entirely, call the environment's interpreter directly:
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run app/main.py
+```
+
+### Setting environment variables
+
+Session only (current window):
+
+```powershell
+$env:JUDETECTOR_MODEL_PATH = "C:\absolute\path\to\best.pt"
+$env:JUDETECTOR_REGISTRY   = "C:\absolute\path\to\models.json"
+$env:JUDETECTOR_METRICS_DIR = "C:\absolute\path\to\metrics"
+```
+
+Verify and remove:
+
+```powershell
+$env:JUDETECTOR_MODEL_PATH
+Remove-Item Env:JUDETECTOR_MODEL_PATH -ErrorAction SilentlyContinue
+```
+
+Persistent (new terminals only — the current window keeps the old environment):
+
+```powershell
+setx JUDETECTOR_MODEL_PATH "C:\absolute\path\to\best.pt"
+# or, explicit about scope:
+[Environment]::SetEnvironmentVariable("JUDETECTOR_MODEL_PATH", "C:\absolute\path\to\best.pt", "User")
+# remove it:
+[Environment]::SetEnvironmentVariable("JUDETECTOR_MODEL_PATH", $null, "User")
+```
+
+### Windows paths in `config/models.json`
+
+JSON treats `\` as an escape character, so a raw Windows path is invalid:
+
+```json
+"weights": "C:\models\best.pt"        ← invalid JSON
+```
+
+Use forward slashes:
+
+```json
+"weights": "C:/models/judah-face-v1/best.pt"
+```
+
+…or escape the backslashes:
+
+```json
+"weights": "C:\\models\\judah-face-v1\\best.pt"
+```
+
+Relative paths (`models/judah-face-v1/best.pt`) resolve against the repository root
+and are the simplest option.
 
 ---
 
@@ -91,6 +223,9 @@ that name, not a guess.
 Relative paths resolve against the repository root. Override the whole file with
 `JUDETECTOR_REGISTRY=/path/to/models.json`.
 
+On Windows, remember to use `/` or escaped `\\` in any absolute path you add —
+see [Windows paths in `config/models.json`](#windows-paths-in-configmodelsjson).
+
 ---
 
 ## Swapping in a general-purpose face detector later
@@ -106,6 +241,12 @@ face detector:
 4. Restart. The model selector appears automatically because more than one model
    is enabled, and the scope warning disappears for that model because
    `is_general_purpose` is `true`.
+
+```powershell
+# the Windows equivalent of step 2
+New-Item -ItemType Directory -Force -Path "models\general-face-v1" | Out-Null
+Copy-Item -Path "C:\path\to\face-model.pt" -Destination "models\general-face-v1\best.pt"
+```
 
 **No view code changes.** The views only ever see `spec.id`, `spec.display_name`,
 `spec.declared_labels` and a `Detector`.
@@ -125,6 +266,13 @@ See [`metrics/README.md`](../metrics/README.md). Short version: copy the numbers
 from your own run into `metrics/judah-face-v1.json` and the Dashboard shows them
 verbatim. Until then it explicitly reports that no metrics are recorded.
 
+Saving result plots alongside the record (Windows):
+
+```powershell
+New-Item -ItemType Directory -Force -Path "metrics\curves" | Out-Null
+Copy-Item -Path "C:\runs\detect\train\pr_curve.png" -Destination "metrics\curves\pr_curve.png"
+```
+
 ---
 
 ## Troubleshooting
@@ -137,3 +285,14 @@ verbatim. Until then it explicitly reports that no metrics are recorded.
 | Sidebar still shows an old model | cached detector | click **Clear cached model** in the sidebar |
 | Labels look wrong | model file itself defines them | check `model.names`; the UI reports the true source |
 | Metrics record rejected | values outside `[0, 1]` | use ratios, not percentages |
+
+### Windows / PowerShell specific
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `Activate.ps1 cannot be loaded because running scripts is disabled` | PowerShell execution policy | `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` |
+| `python` opens the Microsoft Store or is not recognised | Windows App Execution Alias | use `py -3`, or install Python from python.org and tick **Add python.exe to PATH** |
+| `streamlit : The term ... is not recognized` | virtual environment not active | `.\.venv\Scripts\Activate.ps1`, or `python -m streamlit run app/main.py` |
+| `Expecting property name enclosed in double quotes` on startup | unescaped `\` in `config/models.json` | use `/` or `\\` in paths |
+| `$env:JUDETECTOR_MODEL_PATH` is set but the app ignores it | set with `setx` in the same window | open a new terminal, or set `$env:` for the current one |
+| Very long paths fail during install | Windows 260-character path limit | clone to a short path such as `C:\dev\judetector` |
