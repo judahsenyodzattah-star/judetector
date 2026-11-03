@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from app.components.results import readout_fields
 from app.core import config
 
 pytestmark = pytest.mark.ui
@@ -150,7 +151,7 @@ def test_main_entry_point_opens_the_landing_page():
     at = _run_main()
     text = _page_text(at)
     assert "See exactly what the model sees." in text
-    assert "Upload a photo or take a snapshot" in text
+    assert "Upload an image or take a snapshot" in text
 
 
 # --------------------------------------------------------------------------
@@ -160,7 +161,7 @@ def test_home_is_one_headline_one_sentence_one_action(tmp_path):
     at = _run_page(tmp_path, "home")
     text = _page_text(at)
     assert "See exactly what the model sees." in text
-    assert "Upload a photo or take a snapshot" in text
+    assert "Upload an image or take a snapshot" in text
     # Exactly one button, and it is the primary action.
     assert [button.label for button in at.button] == ["Analyse an image"]
     assert at.button[0].proto.type == "primary"
@@ -192,21 +193,54 @@ def test_home_has_no_marketing_scaffolding(tmp_path):
 
 def test_home_illustration_is_declared_as_an_illustration(tmp_path):
     at = _run_page(tmp_path, "home")
-    text = _page_text(at)
-    assert "Illustration, not a detection result." in text
+    captions = _texts(at.caption)
+    assert "Illustration, not an actual detection result." in captions
     # No invented scores, counts, timings or percentages anywhere on the page.
-    visible = _visible_text(at)
+    visible = _visible_text(at) + " " + captions
     assert "%" not in visible
     assert not re.search(r"\d+(\.\d+)?\s*(ms|fps|faces?|detections?)\b", visible, re.I)
     lowered = visible.lower()
     assert "confidence" not in re.sub(r"confidence score", "", lowered)
 
 
-def test_home_states_the_flow_in_one_line(tmp_path):
+def test_home_states_the_flow_once(tmp_path):
     at = _run_page(tmp_path, "home")
     text = _page_text(at)
-    assert "Upload or capture, analyse, then download the annotated image." in text
+    for station in ("Upload or capture", "Analyse", "Review", "Download"):
+        assert station in text
     assert "How it works" not in text
+
+
+def test_home_mounts_the_specimen_twice(tmp_path):
+    """Original and annotated, labelled, in that order."""
+    at = _run_page(tmp_path, "home")
+    text = _page_text(at)
+    assert text.count("jd-plate\"") == 2
+    assert "Original" in text and "Annotated" in text
+    assert text.index(">Original<") < text.index(">Annotated<")
+
+
+def test_home_plates_differ_only_by_the_marking():
+    """The annotated plate is the same specimen plus one marking rectangle.
+
+    This is the promise the caption makes, so it is asserted on the artwork rather
+    than trusted: strip the marking and the two drawings must be identical, and the
+    marking must use the marking colour and nothing else.
+    """
+    from app.ui.theme import PALETTE
+    from app.views.home import specimen_svg
+
+    original = specimen_svg(annotated=False)
+    annotated = specimen_svg(annotated=True)
+    marking = (
+        f'<rect x="126" y="40" width="68" height="76" fill="none" '
+        f'stroke="{PALETTE["mark"]}" stroke-width="3"/>'
+    )
+    assert marking in annotated
+    assert annotated.replace(marking, "") == original
+    assert PALETTE["mark"] not in original
+    # No numbers, scores or units are drawn on the artwork.
+    assert not re.search(r"\\d", original + annotated)
 
 
 def test_home_footer_has_brand_privacy_and_help_link(tmp_path):
@@ -364,9 +398,19 @@ def test_detect_runs_end_to_end_and_reports_real_scores(tmp_path, monkeypatch, p
     at.button[0].click().run()
     assert not at.exception, at.exception
 
-    metrics = {metric.label: metric.value for metric in at.metric}
-    assert metrics["Detections"] == "2"
-    assert metrics["Mean confidence"] == "76.5%"  # (0.91 + 0.62) / 2
+    result = at.session_state["detect_analysis"]["outcome"].result
+    assert readout_fields(result) == [
+        ("Detections", "2"),
+        ("Mean confidence", "76.5%"),  # (0.91 + 0.62) / 2
+        ("Confidence range", "62.0% – 91.0%"),
+        ("Threshold", "0.25"),
+        ("Overlap", "0.45"),
+    ]
+
+    # The same values are on screen, in the fixed-column readout.
+    text = _page_text(at)
+    for label, value in readout_fields(result):
+        assert label in text and value in text
 
     # Preview, original and annotated images are all displayed.
     assert len(at.get("image")) == 3
@@ -389,7 +433,9 @@ def test_detect_fabricates_nothing_when_analysis_is_unavailable(tmp_path, png_by
 
     text = _page_text(at)
     assert "Image analysis is temporarily unavailable" in text
-    assert "Detections" not in [metric.label for metric in at.metric]
+    # No readout at all: nothing to count, nothing to score.
+    assert "Detections" not in text
+    assert "Mean confidence" not in text
 
     # The cause is preserved for developers, not shown to the user.
     for term in TECHNICAL_TERMS:

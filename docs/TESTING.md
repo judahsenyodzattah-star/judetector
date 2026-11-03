@@ -71,22 +71,26 @@ in about two seconds.
   Home as the single default route; the developer page is hidden from that list and
   routable at `/developer`.
 - The landing page holds one headline, one supporting sentence, one primary button
-  (*Analyse an image*) plus a camera page link, an illustration labelled
-  "Illustration, not a detection result.", a single line describing the flow and a
-  footer with the wordmark, privacy line and a Help link. No marketing vocabulary,
-  no second CTA pair, no emoji.
-- The illustration is asserted to carry no percentages, counts or confidence
-  figures, so no invented output can appear on the landing page.
+  (*Analyse an image*) plus a camera page link, the same specimen mounted twice
+  (*Original* then *Annotated*) with the caption "Illustration, not an actual
+  detection result.", the flow as four stations, and a footer with the wordmark,
+  privacy line and a Help link. No marketing vocabulary, no second CTA pair, no emoji.
+- The two plates are asserted to be byte-identical once the marking rectangle is
+  removed, so the annotated plate shows the same specimen plus one outline and
+  nothing else. The artwork is asserted to contain no digits at all, so no invented
+  score, count or percentage can appear on the landing page.
 - Clicking *Analyse an image* lands on a page with a file uploader; the camera page
   link is asserted to be present with its own label.
 - Detect exposes an uploader; thresholds live in one collapsed *Advanced settings*
   panel; nothing is analysed until *Analyse image* is pressed.
-- **End-to-end:** an uploaded image with a fake model produces `Detections = 2`,
-  mean confidence `76.5%`, three displayed images (preview, original, annotated),
-  a download button, and a recorded session run.
+- **End-to-end:** an uploaded image with a fake model produces a readout of
+  `Detections = 2`, mean confidence `76.5%`, confidence range `62.0% – 91.0%` and the
+  applied thresholds, three displayed images (uploaded print, original, annotated),
+  a download button, and a recorded session run. The readout is asserted twice: on
+  the data (`readout_fields(result)`, exact label/value pairs) and on the page text.
 - **Honesty test:** without weights, pressing *Analyse image* shows
-  "Image analysis is temporarily unavailable", **zero** metrics, no download, no
-  recorded run and no technical vocabulary. The underlying cause is asserted to be
+  "Image analysis is temporarily unavailable", **no readout at all** (no count, no
+  confidence), no download, no recorded run and no technical vocabulary. The underlying cause is asserted to be
   present in `session_state["last_analysis_error"]` and on the developer page.
 - Developer page shows "No evaluation metrics recorded" and no metric widgets when no
   record exists; a fixture record displays `0.8340 / 0.8100 / 0.7900` verbatim;
@@ -107,11 +111,18 @@ in about two seconds.
   with) and in the dropzone rule, and the label, instructions and browse-button
   colours are each asserted against white rather than against the surface as a
   whole.
-- Teal is banned from resting surfaces: any rule using `--jd-accent-tint` must be a
-  `:hover` or `:focus` rule. Hover, focus-within and disabled states must exist.
-- The type scale is exactly eight steps (0.78–2.75 rem), so an off-scale
-  `font-size` fails the build.
-- No surface token may have green as its dominant channel.
+- The marking colour is never a surface: any rule that sets a background to
+  `--jd-mark` must be the primary action or its hover state, and the neutral pieces
+  (plate, caption, readout, note, section, flow) are asserted to contain no marking
+  colour at all. Hover, focus-within and disabled uploader states must exist.
+- The marking colour is asserted to be numerically distant from every colour the
+  detector draws with, so a reader cannot confuse the page accent with a box.
+- The type scale is exactly the nine declared steps, the spacing scale is the
+  declared 4–96 px set, and the only radius in the stylesheet is 2px.
+- Effects are banned by test: no gradient, filter, backdrop-filter, text-shadow,
+  keyframes, transform or transition, and the only `box-shadow` allowed is the focus
+  ring.
+- No surface token may carry a colour cast (the reported defect was a green one).
 - Every `data-testid` in the stylesheet is asserted against the installed Streamlit
   bundle, so a Streamlit upgrade that renames a hook fails the suite instead of
   silently dropping styles.
@@ -132,7 +143,7 @@ in about two seconds.
 ## Current result
 
 ```
-192 passed
+202 passed
 ```
 
 Test counts by module are reported in the pull request. UI tests are marked `ui` and

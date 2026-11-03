@@ -94,28 +94,36 @@ Full procedure and troubleshooting: [`docs/MODEL_INTEGRATION.md`](docs/MODEL_INT
 
 ## Application sections
 
-The application opens on **Home**, a short landing page that leads straight into the
-workflow.
+The application opens on **Home**, which shows the product's subject rather than a
+pitch: the same specimen mounted twice, once as captured and once with the marking the
+model draws, captioned as an illustration.
 
 | Page | Purpose |
 |---|---|
-| **Home** (default) | One headline, one sentence, one primary action (*Analyse an image*) with a secondary camera link, an illustration that is labelled as an illustration, a one-line description of the flow and a privacy footer |
-| **Detect** | Upload an image → *Analyse image* → count, mean confidence, original and annotated images, annotated-image download. Confidence/overlap thresholds sit in a collapsed **Advanced settings** panel. |
+| **Home** (default) | One headline, one sentence, one primary action (*Analyse an image*) with a secondary camera link, the same specimen mounted twice (*Original* / *Annotated*) and captioned "Illustration, not an actual detection result.", the flow as four stations on one rule, and a privacy footer |
+| **Detect** | Upload an image (mounted and captioned with file name, frame and size) → *Analyse image* → a fixed-column readout (count, mean confidence, confidence range, applied thresholds), the original and annotated prints, and the annotated-image download. Thresholds sit in a collapsed **Advanced settings** panel. |
 | **Camera** | Browser snapshot → the same pipeline, one still frame per capture (no live video) |
 | **Help** | How it works, what the numbers mean, privacy, honest limitations |
 | **Developer** (`/developer`, hidden) | Model resolution, weights paths, runtime availability, setup commands, dataset composition, recorded evaluation metrics, session activity |
 
 ### Interface
 
-The interface is a small design system rather than per-page styling:
+The interface is a **proof sheet**, not a dashboard, and it is one shared stylesheet
+rather than per-page styling:
 
-- `app/ui/theme.py` — design tokens and one shared stylesheet: a warm off-white
-  canvas, charcoal ink, one teal accent used only for interaction, an 8-step
-  spacing scale (`--jd-1` … `--jd-8`, 4–64 px), an 8-step type scale, hairline
-  rules instead of cards, and no tinted resting surfaces.
-- `app/ui/components.py` — the primitives each page is built from: page header,
-  section label, note, empty state, plus ordered steps, bullets, key/value rows,
-  the workflow line and the footer. No icons, no cards, no pills.
+- `app/ui/theme.py` — design tokens and one stylesheet. Sheet `#F4F2ED`, mounts
+  `#FFFFFF`, ink `#16181A`, secondary ink `#52585C`, hairlines `#D0CBC1`, and one
+  marking colour, ochre `#8A5A00`, which may fill an action, underline the active
+  navigation entry, draw a focus ring or outline a detection — never a panel, badge
+  or tinted section. Spacing is a 4px scale (`--jd-1` … `--jd-9`, 4–96 px), corners
+  are 2px, and effects are limited to focus rings.
+- `app/ui/components.py` — the primitives: page head, section, mounted plate,
+  caption strip, fixed-column readout, flow rule, note, empty state, steps, bullets
+  and footer. Monospace is reserved for facts (file name, frame, size, counts,
+  confidences, thresholds); prose is never set in it.
+- `.streamlit/config.toml` — the same tokens where Streamlit can apply them itself
+  (colours, 2px radii, 15px base size, sans/mono roles), so native widgets inherit
+  the language instead of being overridden.
 - `app/ui/nav.py` — the four consumer destinations via Streamlit's own
   `st.navigation`.
 
