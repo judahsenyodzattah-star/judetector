@@ -1,12 +1,13 @@
 """Presentation of a detection result.
 
-The primary view is deliberately small: how many detections, how confident, the
-images and the download. Coordinates, applied thresholds and timing are real
-measurements but of little use to someone who just wants the annotated image, so
-they live in one collapsed section.
+The primary view is a fixed-column readout of the numbers the detector actually
+produced — count, mean confidence, confidence range, applied thresholds — then the
+two prints (original and annotated) and the download. Per-box coordinates and
+timing are real measurements but of little use to someone who wants the annotated
+image, so they live in one collapsed section.
 
 All values come from the `DetectionResult` produced by the detector; this module
-only formats them.
+only formats them. Nothing is estimated, rounded from a guess, or invented.
 """
 
 from __future__ import annotations
@@ -16,24 +17,41 @@ import streamlit as st
 
 from app.core.detector import DetectionResult
 from app.core.image_io import to_png_bytes
-from app.ui.components import kv_row, meta, note, section
+from app.ui.components import meta, note, readout, section
 
 __all__ = [
+    "readout_fields",
     "render_detection_details",
     "render_download_button",
     "render_no_detections_note",
-    "render_result_summary",
+    "render_result_readout",
 ]
 
 
-def render_result_summary(result: DetectionResult) -> None:
-    """Two headline numbers, derived solely from the inference result."""
-    mean_conf = result.mean_confidence
-    columns = st.columns(2, gap="small")
-    columns[0].metric("Detections", result.count)
-    columns[1].metric(
-        "Mean confidence", f"{mean_conf:.1%}" if mean_conf is not None else "—"
-    )
+def readout_fields(result: DetectionResult) -> list[tuple[str, str]]:
+    """The result as label/value pairs, every one of them measured.
+
+    Confidence rows appear only when the result carries them, so an empty result
+    never shows a placeholder that could be read as a score.
+    """
+    rows: list[tuple[str, str]] = [("Detections", str(result.count))]
+    if result.mean_confidence is not None:
+        rows.append(("Mean confidence", f"{result.mean_confidence:.1%}"))
+    if result.min_confidence is not None and result.max_confidence is not None:
+        rows.append(
+            (
+                "Confidence range",
+                f"{result.min_confidence:.1%} – {result.max_confidence:.1%}",
+            )
+        )
+    rows.append(("Threshold", f"{result.confidence_threshold:.2f}"))
+    rows.append(("Overlap", f"{result.iou_threshold:.2f}"))
+    return rows
+
+
+def render_result_readout(result: DetectionResult) -> None:
+    """Render the readout block. Labels left, mono values right, aligned."""
+    readout(readout_fields(result))
 
 
 def render_no_detections_note(result: DetectionResult) -> None:
@@ -48,19 +66,7 @@ def render_no_detections_note(result: DetectionResult) -> None:
 def render_detection_details(result: DetectionResult) -> None:
     """Collapsed technical detail: applied settings, timing and per-box rows."""
     with st.expander("Detection details", expanded=False):
-        range_text = (
-            f"{result.min_confidence:.2f} – {result.max_confidence:.2f}"
-            if result.min_confidence is not None and result.max_confidence is not None
-            else "—"
-        )
-        kv_row(
-            [
-                ("Confidence threshold", f"{result.confidence_threshold:.2f}"),
-                ("Overlap (IoU)", f"{result.iou_threshold:.2f}"),
-                ("Confidence range", range_text),
-                ("Processing time", f"{result.inference_ms:.0f} ms"),
-            ]
-        )
+        readout([("Processing time", f"{result.inference_ms:.0f} ms")])
         if not result.detections:
             meta("No boxes were produced for this image.")
             return

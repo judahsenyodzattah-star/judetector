@@ -31,10 +31,10 @@ from app.core.stats import clear_runs, get_runs, runs_to_records, summarise
 from app.ui.components import (
     bullets,
     empty_state,
-    kv_row,
     meta,
     note,
     page_header,
+    readout,
     section,
 )
 from app.ui.theme import inject_theme
@@ -96,7 +96,7 @@ def _render_model(spec: ModelSpec) -> None:
     info = detector.model_info()
 
     section("Model", "What the application resolved for this session.")
-    kv_row(
+    readout(
         [
             ("Model id", spec.id),
             ("Task", spec.task),
@@ -130,7 +130,7 @@ def _render_runtime() -> None:
             rows.append((module, str(getattr(loaded, "__version__", "installed"))))
         except Exception as exc:  # noqa: BLE001 - diagnostics only
             rows.append((module, f"import failed: {type(exc).__name__}"))
-    kv_row(rows)
+    readout(rows)
 
 
 def _render_last_error() -> None:
@@ -139,7 +139,7 @@ def _render_last_error() -> None:
     if not record:
         meta("No failed analysis in this session.")
         return
-    kv_row(
+    readout(
         [
             ("When", record.get("at", "—")),
             ("Source", record.get("source", "—")),
@@ -231,7 +231,7 @@ def _render_dataset(spec: ModelSpec) -> None:
 
     section("Dataset", "Declared composition of the training data.")
     split = dataset.get("split") or {}
-    kv_row(
+    readout(
         [
             ("Images", str(dataset.get("total_images", "—"))),
             ("Annotated", str(dataset.get("annotated_images", "—"))),

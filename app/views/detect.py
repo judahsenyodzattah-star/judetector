@@ -1,7 +1,9 @@
-"""Detect — the primary end-user workflow: upload, analyse, review, download.
+"""Detect — the primary workflow: upload, analyse, review, download.
 
-Nothing technical appears here. If analysis cannot run, the page says so in one
-plain sentence; the technical cause goes to the developer page instead.
+The image is the largest object on the page. It is mounted like a print, captioned
+with real facts about the file (name, frame, size), and the controls sit beside it
+rather than above it. Nothing technical appears here; if analysis cannot run, the
+page says so in one plain sentence and the cause goes to the developer page.
 """
 
 from __future__ import annotations
@@ -16,11 +18,16 @@ from app.components.workflow import (
     decode_image,
 )
 from app.core import config
-from app.core.image_io import describe_image
-from app.ui.components import meta, note, page_header
+from app.ui.components import caption_strip, meta, note, page_header
 from app.ui.theme import inject_theme
 
 __all__ = ["render"]
+
+
+def _kilobytes(size: int) -> str:
+    if size >= 1024 * 1024:
+        return f"{size / (1024 * 1024):.1f} MB"
+    return f"{max(1, round(size / 1024))} KB"
 
 
 def render() -> None:
@@ -46,15 +53,25 @@ def render() -> None:
         note(UNREADABLE_MESSAGE, tone="warn")
         return
 
-    st.image(image, width=380)
-    meta(f"{uploaded.name} · {describe_image(image)}")
+    plate_column, controls_column = st.columns([7, 5], gap="large")
 
-    if spec is None or model_error:
-        # A registry/config problem is a developer concern: the user gets one line.
-        note(UNAVAILABLE_MESSAGE, tone="warn")
-        return
+    with plate_column:
+        st.image(image, width="stretch", alt=f"The uploaded image, {uploaded.name}")
 
-    confidence, iou = advanced_settings()
+    with controls_column:
+        caption_strip(
+            [
+                ("File", uploaded.name),
+                ("Frame", f"{image.width} × {image.height}"),
+                ("Size", _kilobytes(len(data))),
+            ]
+        )
+        if spec is None or model_error:
+            # A registry/config problem is a developer concern: the user gets one line.
+            note(UNAVAILABLE_MESSAGE, tone="warn")
+            return
+        confidence, iou = advanced_settings()
+
     analysis_workspace(
         namespace="detect_analysis",
         source="upload",

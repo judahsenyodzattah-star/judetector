@@ -15,7 +15,7 @@ from app.components.workflow import (
     analysis_workspace,
     decode_image,
 )
-from app.ui.components import meta, note, page_header
+from app.ui.components import caption_strip, meta, note, page_header
 from app.ui.theme import inject_theme
 
 __all__ = ["render"]
@@ -28,7 +28,9 @@ def render() -> None:
 
     spec, model_error = current_model()
 
-    snapshot = st.camera_input("Take a snapshot", help="Your browser will ask for camera access.")
+    snapshot = st.camera_input(
+        "Take a snapshot", help="Your browser will ask for camera access."
+    )
     meta("One still frame per capture. Live video is not analysed.")
 
     if snapshot is None:
@@ -40,11 +42,22 @@ def render() -> None:
         note(UNREADABLE_MESSAGE, tone="warn")
         return
 
-    if spec is None or model_error:
-        note(UNAVAILABLE_MESSAGE, tone="warn")
-        return
+    plate_column, controls_column = st.columns([7, 5], gap="large")
+    with plate_column:
+        st.image(image, width="stretch", alt="The snapshot you just took")
 
-    confidence, iou = advanced_settings()
+    with controls_column:
+        caption_strip(
+            [
+                ("Source", "Camera"),
+                ("Frame", f"{image.width} × {image.height}"),
+            ]
+        )
+        if spec is None or model_error:
+            note(UNAVAILABLE_MESSAGE, tone="warn")
+            return
+        confidence, iou = advanced_settings()
+
     analysis_workspace(
         namespace="camera_analysis",
         source="camera",

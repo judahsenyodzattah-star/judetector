@@ -20,14 +20,14 @@ from app.components.results import (
     render_detection_details,
     render_download_button,
     render_no_detections_note,
-    render_result_summary,
+    render_result_readout,
 )
 from app.core.errors import InvalidImageError
 from app.core.image_io import downscale, load_image
 from app.core.registry import ModelSpec
 from app.core.runtime import get_detector
 from app.core.stats import DetectionRun, record_run_once
-from app.ui.components import meta, note, section
+from app.ui.components import meta, note, plate_label, section
 
 __all__ = [
     "ERROR_STATE_KEY",
@@ -111,14 +111,21 @@ def render_outcome(outcome: AnalysisOutcome, image: Image.Image, filename: str) 
     assert result is not None  # guaranteed by outcome.ok
 
     section("Result")
-    render_result_summary(result)
+    render_result_readout(result)
     render_no_detections_note(result)
 
     original_column, detected_column = st.columns(2, gap="medium")
     with original_column:
-        st.image(image, caption="Original", width="stretch")
+        st.image(image, width="stretch", alt="The image as uploaded")
+        plate_label("Original")
     with detected_column:
-        st.image(outcome.processed, caption="Detected", width="stretch")
+        if outcome.processed is not None:
+            st.image(
+                outcome.processed,
+                width="stretch",
+                alt="The same image with the model's detections marked",
+            )
+            plate_label("Detected")
 
     if outcome.processed is not None:
         render_download_button(outcome.processed, filename)
