@@ -82,11 +82,27 @@ Full procedure and troubleshooting: [`docs/MODEL_INTEGRATION.md`](docs/MODEL_INT
 
 | Page | Purpose |
 |---|---|
-| **Home** | Introduction, purpose, navigation and the active model summary |
-| **Detect** | Image upload, confidence/IoU thresholds, boxes, detection count, per-face confidence table, annotated-image download |
-| **Camera** | Browser camera snapshot → the same detection pipeline (continuous video is out of scope) |
-| **Dashboard** | Model information, declared dataset facts, recorded evaluation metrics, performance plots, session detection statistics |
-| **About** | Project, student details, model and dataset information, limitations, ethical considerations |
+| **Overview** | Landing workspace: primary actions, model connection status, capabilities and recent activity |
+| **Detect** | Image upload, collapsible threshold settings, boxes, detection count, per-detection confidence table, annotated-image download |
+| **Camera** | Browser camera snapshot → the same detection pipeline (single frames per capture; no live video) |
+| **Analytics** | Recorded evaluation results, session detection statistics, and model/dataset detail behind an expander |
+| **About** | Product capabilities, privacy guidance, and model limitations |
+
+### Interface
+
+The interface is a small design system rather than per-page styling:
+
+- `app/ui/theme.py` — design tokens and one shared stylesheet (off-white canvas,
+  charcoal type, restrained teal accent, consistent radii and hover/active states).
+- `app/ui/icons.py` — inline SVG icons (Lucide), used for all in-page iconography.
+- `app/ui/components.py` — reusable primitives: page header, sections, status
+  pills, notes, empty states, tiles, key/value strips.
+- `app/ui/nav.py` — the five navigation entries, using Streamlit's own
+  `st.navigation` with Material SVG icons (no emoji in navigation).
+
+Model controls live in a collapsible **Detection settings** panel on the workspace
+pages; the sidebar carries navigation plus a read-only model status, so technical
+controls never compete with navigation.
 
 ---
 
@@ -97,7 +113,8 @@ judetector/
 ├── app/
 │   ├── main.py                  # entry point + navigation
 │   ├── views/                   # Home, Detect, Camera, Dashboard, About
-│   ├── components/              # shared UI: pipeline, results, status, sidebar
+│   ├── components/              # shared UI: pipeline, results, status, model settings
+│   ├── ui/                      # design system: theme, icons, components, navigation
 │   └── core/                    # Streamlit-free logic
 │       ├── config.py            # paths, defaults, env overrides
 │       ├── detector.py          # Detector interface + UltralyticsDetector
