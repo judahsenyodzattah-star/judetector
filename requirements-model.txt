@@ -1,0 +1,6 @@
+# Optional ML stack -- required only to run real inference against a trained model.
+# Kept separate from requirements.txt so the app + test suite can run without
+# downloading PyTorch, which is large.
+ultralytics>=8.3
+torch>=2.0
+torchvision>=0.15

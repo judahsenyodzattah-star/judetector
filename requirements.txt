@@ -1,0 +1,11 @@
+# JUDEtector runtime dependencies.
+# NOTE: `ultralytics` is intentionally NOT pinned here as a hard import path for the
+# application core -- DetectorService imports it lazily so the UI can start and report
+# a clear "model unavailable" state when the ML stack is absent.
+streamlit>=1.36,<2.0
+pillow>=10.0
+numpy>=1.24
+pandas>=2.0
+
+# Install this to actually run inference (see docs/MODEL_INTEGRATION.md):
+#   pip install -r requirements-model.txt

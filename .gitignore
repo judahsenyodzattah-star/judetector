@@ -1,0 +1,58 @@
+# ---- Secrets & environment ----
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# ---- Model weights (never commit) ----
+*.pt
+*.pth
+*.onnx
+*.engine
+*.tflite
+!models/.gitkeep
+
+# ---- Datasets / private images (never commit) ----
+datasets/
+dataset/
+data/images/
+data/labels/
+data/raw/
+*.jpg
+*.jpeg
+*.png
+*.webp
+!docs/assets/*.png
+!docs/assets/*.jpg
+# Evaluation plots are small, non-sensitive and useful in the repo
+!metrics/curves/*.png
+
+# ---- Ultralytics run artefacts ----
+runs/
+wandb/
+*.cache
+weights/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# ---- Testing / tooling ----
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
