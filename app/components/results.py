@@ -93,5 +93,4 @@ def render_download_button(processed_image, filename: str) -> None:
         data=to_png_bytes(processed_image),
         file_name=f"{stem}_judetector.png",
         mime="image/png",
-        icon=":material/download:",
     )

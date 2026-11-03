@@ -106,6 +106,6 @@ def advanced_settings() -> tuple[float, float]:
 
 def reload_model_button() -> None:
     """Developer-page control: pick up replaced weights without a restart."""
-    if st.button("Reload model", icon=":material/refresh:", help="Clear cached detectors"):
+    if st.button("Reload model", help="Clear cached detectors"):
         clear_detector_cache()
         st.rerun()

@@ -78,7 +78,7 @@ def analysis_workspace(
         return
 
     signature = (filename, len(data), round(confidence, 2), round(iou, 2))
-    pressed = st.button(button_label, type="primary", icon=":material/bolt:")
+    pressed = st.button(button_label, type="primary")
 
     if pressed:
         with st.spinner("Analysing image…"):

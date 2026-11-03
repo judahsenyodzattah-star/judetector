@@ -310,7 +310,7 @@ def _render_session_activity() -> None:
         f"{f'{summary.mean_inference_ms:.0f} ms' if summary.mean_inference_ms else '—'}"
     )
 
-    if st.button("Clear session activity", icon=":material/delete:"):
+    if st.button("Clear session activity"):
         clear_runs(st.session_state)
         st.rerun()
 
