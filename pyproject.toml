@@ -1,0 +1,18 @@
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+markers = [
+    "slow: tests that require a real model or long-running inference",
+    "ui: Streamlit AppTest based interface tests",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+exclude = [".venv", "datasets", "runs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501"]

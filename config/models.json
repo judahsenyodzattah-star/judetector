@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "default_model_id": "judah-face-v1",
+  "models": [
+    {
+      "id": "judah-face-v1",
+      "display_name": "JUDEtector — judah model (v1)",
+      "enabled": true,
+      "kind": "subject_specific",
+      "is_general_purpose": false,
+      "weights": "models/judah-face-v1/best.pt",
+      "declared_labels": ["judah"],
+      "task": "detect",
+      "description": "A single-class Ultralytics YOLO detector trained on the author's own 'judy-face-detection' dataset. The only class is 'judah', so this model is subject-specific and is NOT a validated general-purpose face detector.",
+      "provenance": {
+        "dataset_name": "judy-face-detection",
+        "dataset_platform": "Ultralytics Dataset (declared by project author)",
+        "training_status": "Trained — one model exists (not retrained, not modified by this application)",
+        "weights_location": "Not committed to Git. Place at the path above or set JUDETECTOR_MODEL_PATH.",
+        "metrics_recorded": false
+      },
+      "dataset": {
+        "total_images": 711,
+        "annotated_images": 675,
+        "unannotated_reserved": 36,
+        "classes": ["judah"],
+        "split": {
+          "train": 368,
+          "val": 203,
+          "test": 140
+        },
+        "source": "Declared by the project author from Ultralytics"
+      },
+      "metrics_file": "metrics/judah-face-v1.json"
+    },
+    {
+      "id": "general-face-v1",
+      "display_name": "General-purpose face detector (template)",
+      "enabled": false,
+      "kind": "general_purpose",
+      "is_general_purpose": true,
+      "weights": "models/general-face-v1/best.pt",
+      "declared_labels": ["face"],
+      "task": "detect",
+      "description": "Template entry showing how to register a future general-purpose face detector. Disabled by default: no weights exist at this path yet. To activate, place a trained multi-subject face model at the weights path and set \"enabled\": true.",
+      "provenance": {
+        "dataset_name": "Not yet trained",
+        "dataset_platform": "—",
+        "training_status": "Not trained",
+        "weights_location": "Not present",
+        "metrics_recorded": false
+      },
+      "dataset": null,
+      "metrics_file": "metrics/general-face-v1.json"
+    }
+  ]
+}
