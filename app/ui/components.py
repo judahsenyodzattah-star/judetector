@@ -12,12 +12,14 @@ from html import escape
 
 import streamlit as st
 
-from app.ui.icons import svg
+from app.ui.icons import ICON_INLINE, ICON_UI, svg
 
 __all__ = [
     "PILL_TONES",
     "bullets",
     "empty_state",
+    "footer",
+    "hero",
     "kv_row",
     "meta",
     "note",
@@ -49,7 +51,7 @@ def page_header(
     pill = f"<div>{status_pill(*status)}</div>" if status else ""
     subtitle_html = f'<p class="jd-sub">{escape(subtitle)}</p>' if subtitle else ""
     eyebrow_html = (
-        f'<div class="jd-eyebrow">{svg(eyebrow_icon, 13)}{escape(eyebrow)}</div>'
+        f'<div class="jd-eyebrow">{svg(eyebrow_icon, ICON_INLINE)}{escape(eyebrow)}</div>'
         if eyebrow
         else ""
     )
@@ -63,6 +65,23 @@ def page_header(
         "</div>"
         f"{pill}"
         "</div>"
+        "</div>"
+    )
+
+
+def hero(
+    title: str,
+    lede: str,
+    *,
+    eyebrow: str,
+    eyebrow_icon: str = "scan",
+) -> None:
+    """Landing-page hero: small eyebrow, large headline, one supporting line."""
+    _html(
+        '<div class="jd-hero">'
+        f'<div class="jd-hero__eyebrow">{svg(eyebrow_icon, ICON_INLINE)}{escape(eyebrow)}</div>'
+        f'<h1 class="jd-hero__title">{escape(title)}</h1>'
+        f'<p class="jd-hero__lede">{escape(lede)}</p>'
         "</div>"
     )
 
@@ -89,31 +108,43 @@ def status_pill(label: str, tone: str = "muted") -> str:
 def note(text: str, *, tone: str = "info", icon: str = "info") -> None:
     """Compact inline notice. Used instead of full-width alert banners."""
     tone_css = {"warn": "jd-note--warn", "ok": "jd-note--ok"}.get(tone, "")
-    _html(f'<div class="jd-note {tone_css}">{svg(icon, 15)}<div>{escape(text)}</div></div>')
+    _html(
+        f'<div class="jd-note {tone_css}">{svg(icon, ICON_INLINE)}<div>{escape(text)}</div></div>'
+    )
 
 
 def empty_state(*, icon: str, title: str, body: str) -> None:
     """Purposeful empty state: says what is missing and what to do next."""
     _html(
         '<div class="jd-empty">'
-        f'<div class="jd-empty__icon">{svg(icon, 17)}</div>'
+        f'<div class="jd-empty__icon">{svg(icon, ICON_UI)}</div>'
         f'<p class="jd-empty__title">{escape(title)}</p>'
         f'<p class="jd-empty__body">{escape(body)}</p>'
         "</div>"
     )
 
 
-def steps(items: Sequence[tuple[str, str]]) -> None:
-    """Numbered how-it-works list of (title, description) pairs."""
+def steps(
+    items: Sequence[tuple[str, str, str]],
+    *,
+    grid: bool = False,
+) -> None:
+    """Ordered ``(icon, title, body)`` steps.
+
+    ``grid=True`` lays them out horizontally for the landing page; the default is a
+    vertical list for reference-style pages.
+    """
     rendered = "".join(
         '<div class="jd-step">'
         f'<div class="jd-step__num">{index}</div>'
-        f'<div class="jd-step__text"><b>{escape(title)}</b> — {escape(body)}</div>'
+        f'<div class="jd-step__body"><b>{escape(title)}</b>'
+        f"<span>{escape(body)}</span></div>"
+        f'<div class="jd-step__icon">{svg(icon_name, ICON_UI)}</div>'
         "</div>"
-        for index, (title, body) in enumerate(items, start=1)
+        for index, (icon_name, title, body) in enumerate(items, start=1)
     )
-    _html(f'<div class="jd-steps">{rendered}</div>')
-
+    layout = "jd-steps jd-steps--grid" if grid else "jd-steps"
+    _html(f'<div class="{layout}">{rendered}</div>')
 
 
 def bullets(items: Sequence[str]) -> None:
@@ -134,3 +165,26 @@ def kv_row(items: Sequence[tuple[str, str]]) -> None:
 def meta(text: str) -> None:
     """Dim single line of context under a component."""
     _html(f'<p class="jd-meta">{escape(text)}</p>')
+
+
+# --------------------------------------------------------------------------
+# Footer
+# --------------------------------------------------------------------------
+def footer(note: str, *, page, page_label: str = "Help") -> None:
+    """Minimal branded footer: wordmark, one privacy line, one page link.
+
+    The link is rendered with `st.page_link`, so it is a real anchor — keyboard
+    accessible and routable — rather than raw HTML.
+    """
+    body = (
+        '<div class="jd-footer">'
+        f'<div class="jd-footer__brand"><span class="jd-footer__mark">{svg("scan", ICON_INLINE)}'
+        "</span>JUDEtector</div>"
+        f'<p class="jd-footer__note">{escape(note)}</p>'
+        "</div>"
+    )
+    text_column, link_column = st.columns([5, 1], gap="small", vertical_alignment="center")
+    with text_column:
+        _html(body)
+    with link_column:
+        st.page_link(page, label=page_label, icon=None)

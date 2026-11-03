@@ -24,9 +24,10 @@ def render() -> None:
     section("Analysing an image")
     steps(
         [
-            ("Upload or capture", "Choose a photo on Detect, or take a snapshot on Camera."),
-            ("Analyse", "Press the button and wait a moment while the image is processed."),
+            ("upload", "Upload or capture", "Choose a photo on Detect, or take a snapshot on Camera."),
+            ("scan", "Analyse", "Press the button and wait a moment while the image is processed."),
             (
+                "download",
                 "Review and download",
                 "See what was found, then download the marked-up image if you need it.",
             ),

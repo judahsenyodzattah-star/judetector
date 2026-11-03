@@ -13,6 +13,7 @@ of presentation.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -74,8 +75,17 @@ def _texts(elements) -> str:
 
 
 def _page_text(app: AppTest) -> str:
-    """All rendered markdown for a run (custom primitives render as markdown)."""
-    return _texts(app.markdown)
+    """Rendered markdown for a run, excluding the injected stylesheet."""
+    return " ".join(
+        str(element.value)
+        for element in app.markdown
+        if not str(element.value).lstrip().startswith("<style")
+    )
+
+
+def _visible_text(app: AppTest) -> str:
+    """Page text with all markup removed — what a reader actually sees."""
+    return re.sub(r"<[^>]+>", " ", _page_text(app))
 
 
 def _interactive_text(app: AppTest) -> str:
@@ -100,10 +110,16 @@ def _interactive_text(app: AppTest) -> str:
 def test_visible_navigation_is_task_oriented():
     from app.ui.nav import ENTRIES
 
-    assert [entry.title for entry in ENTRIES] == ["Detect", "Camera", "Help"]
-    assert [entry.url_path for entry in ENTRIES] == ["detect", "camera", "help"]
-    assert ENTRIES[0].default is True
+    assert [entry.title for entry in ENTRIES] == ["Home", "Detect", "Camera", "Help"]
+    assert [entry.url_path for entry in ENTRIES] == ["home", "detect", "camera", "help"]
     assert all(not entry.hidden for entry in ENTRIES)
+
+
+def test_home_is_the_single_default_route():
+    from app.ui.nav import DEVELOPER, ENTRIES
+
+    defaults = [entry.key for entry in (*ENTRIES, DEVELOPER) if entry.default]
+    assert defaults == ["home"]
 
 
 def test_navigation_icons_are_svg_not_emoji():
@@ -123,12 +139,81 @@ def test_developer_page_is_hidden_but_routable():
     assert DEVELOPER.key not in [entry.key for entry in ENTRIES]
 
 
-def test_main_entry_point_opens_the_detect_workflow():
+def _run_main() -> AppTest:
     at = AppTest.from_file(str(MAIN_SCRIPT), default_timeout=TIMEOUT)
     at.run()
     assert not at.exception, at.exception
-    assert len(at.file_uploader) == 1
-    assert "Detect" in _page_text(at)
+    return at
+
+
+def test_main_entry_point_opens_the_landing_page():
+    at = _run_main()
+    text = _page_text(at)
+    assert "A clearer way to explore your images." in text
+    assert "IMAGE ANALYSIS, SIMPLIFIED" in text
+
+
+# --------------------------------------------------------------------------
+# Landing page
+# --------------------------------------------------------------------------
+def test_home_hero_copy_and_calls_to_action(tmp_path):
+    at = _run_page(tmp_path, "home")
+    text = _page_text(at)
+    assert "A clearer way to explore your images." in text
+    assert "IMAGE ANALYSIS, SIMPLIFIED" in text
+    assert "Upload a photo, analyse it with the configured detection model" in text
+    assert [button.label for button in at.button] == ["Start detecting", "Try camera"]
+    assert at.button[0].proto.type == "primary"
+
+
+def test_home_preview_is_illustrative_not_fabricated_output(tmp_path):
+    at = _run_page(tmp_path, "home")
+    text = _page_text(at)
+    assert "Illustrative preview" in text
+    assert "not model output" in text
+    assert "Original" in text and "Analysed" in text
+    # No invented scores, counts, timings or percentages anywhere on the page.
+    # (The ordered steps legitimately number themselves 1–3.)
+    visible = _visible_text(at)
+    assert "%" not in visible
+    assert not re.search(r"\d+(\.\d+)?\s*(ms|fps|faces?|detections?)\b", visible, re.I)
+    assert "confidence" not in visible.lower()
+
+
+def test_home_shows_three_ordered_steps(tmp_path):
+    at = _run_page(tmp_path, "home")
+    text = _page_text(at)
+    for title in ("Upload or capture an image", "Analyse the image", "Review and download"):
+        assert title in text
+    assert "How it works" in text
+
+
+def test_home_footer_has_brand_privacy_and_help_link(tmp_path):
+    at = _run_page(tmp_path, "home")
+    text = _page_text(at)
+    assert "JUDEtector" in text
+    assert "never stored" in text
+    assert "Detection is not recognition" in text
+    assert [link.label for link in at.get("page_link")] == ["Help"]
+
+
+@pytest.mark.parametrize(
+    ("label", "expected_page", "marker"),
+    [
+        ("Start detecting", "detect", "file_uploader"),
+        ("Try camera", "camera", "camera_input"),
+    ],
+)
+def test_hero_cta_navigates_to_its_destination(label, expected_page, marker):
+    """Clicking a CTA in the running app must land on that page."""
+    at = _run_main()
+    labels = [button.label for button in at.button]
+    assert label in labels
+
+    at.button[labels.index(label)].click().run()
+    assert not at.exception, at.exception
+    assert at.get(marker), f"'{label}' did not land on a page with {marker}"
+    assert "A clearer way to explore your images." not in _page_text(at)
 
 
 def test_sidebar_carries_no_model_diagnostics():
@@ -142,7 +227,7 @@ def test_sidebar_carries_no_model_diagnostics():
 # --------------------------------------------------------------------------
 # Every page renders
 # --------------------------------------------------------------------------
-@pytest.mark.parametrize("module_name", ["detect", "camera", "help", "dev"])
+@pytest.mark.parametrize("module_name", ["home", "detect", "camera", "help", "dev"])
 def test_each_view_renders_without_exception(tmp_path, module_name):
     at = _run_page(tmp_path, module_name)
     assert not at.exception, at.exception
@@ -151,6 +236,12 @@ def test_each_view_renders_without_exception(tmp_path, module_name):
 # --------------------------------------------------------------------------
 # Detect: the first-run experience
 # --------------------------------------------------------------------------
+def test_home_has_no_technical_detail(tmp_path):
+    text = _interactive_text(_run_page(tmp_path, "home"))
+    for term in TECHNICAL_TERMS:
+        assert term not in text, f"'{term}' appears on the Home page"
+
+
 def test_detect_offers_an_upload_control_and_no_technical_detail(tmp_path):
     at = _run_page(tmp_path, "detect")
     assert len(at.file_uploader) == 1
@@ -457,7 +548,7 @@ def test_application_contains_no_academic_details(tmp_path, academic_detail):
     rendered = _page_text(at_main) + _texts(at_main.sidebar.markdown)
     assert academic_detail not in rendered
 
-    for page in ("detect", "camera", "help", "dev"):
+    for page in ("home", "detect", "camera", "help", "dev"):
         at = _run_page(tmp_path, page)
         page_rendered = _page_text(at) + _texts(at.sidebar.markdown)
         assert academic_detail not in page_rendered, f"{academic_detail} leaked into {page}"

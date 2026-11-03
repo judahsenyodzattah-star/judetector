@@ -1,16 +1,23 @@
 """Application navigation definition.
 
-Only end-user destinations are listed. Technical controls and diagnostics live on
-a separate developer page that is *hidden* from the navigation
+Consumer destinations only — Home, Detect, Camera, Help. Technical controls and
+diagnostics live on a separate developer page that is *hidden* from the navigation
 (`visibility="hidden"`) and reachable only by its URL, `/developer`.
 
 That page is deliberately not described as secured: Streamlit's visibility flag
 hides a route, it does not authorise one. Real access control would have to be
 implemented at the hosting layer, and nothing here should imply otherwise.
 
+**Why Material icons in the navigation?** `st.Page(icon=...)` accepts only an
+emoji, ``:material/name:`` or ``"spinner"`` — arbitrary inline SVG is not
+supported. Replacing the native navigation with hand-written links would cost URL
+routing, keyboard support and the mobile drawer, so the navigation uses the closest
+Material Symbols Rounded glyph and every icon *inside* the pages comes from the
+Lucide set in `app.ui.icons`. Both are 24px grids with rounded terminals.
+
 Destinations are declared as plain data (:class:`NavEntry`) and turned into
-`st.Page` objects once, so tests can assert the information architecture without
-instantiating Streamlit objects.
+`st.Page` objects per script run, so tests can assert the information architecture
+without instantiating Streamlit objects.
 """
 
 from __future__ import annotations
@@ -20,7 +27,7 @@ from dataclasses import dataclass
 
 import streamlit as st
 
-from app.views import camera, detect, dev
+from app.views import camera, detect, dev, home
 from app.views import help as help_view
 
 __all__ = [
@@ -47,7 +54,8 @@ class NavEntry:
 
 
 ENTRIES: tuple[NavEntry, ...] = (
-    NavEntry("detect", "Detect", ":material/image_search:", "detect", detect.render, default=True),
+    NavEntry("home", "Home", ":material/home:", "home", home.render, default=True),
+    NavEntry("detect", "Detect", ":material/image_search:", "detect", detect.render),
     NavEntry("camera", "Camera", ":material/photo_camera:", "camera", camera.render),
     NavEntry("help", "Help", ":material/help:", "help", help_view.render),
 )
@@ -87,7 +95,7 @@ def build_pages() -> list[st.Page]:
 
 
 def page_for(key: str) -> st.Page:
-    """Navigation entry by key, for in-app links."""
+    """Navigation entry by key, for in-app links and CTA buttons."""
     for entry in (*ENTRIES, DEVELOPER):
         if entry.key == key:
             return _page(entry)
