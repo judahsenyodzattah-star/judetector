@@ -99,7 +99,7 @@ workflow.
 
 | Page | Purpose |
 |---|---|
-| **Home** (default) | Hero with two calls to action (*Start detecting*, *Try camera*), an illustrative original → annotated preview, three steps, and a privacy footer |
+| **Home** (default) | One headline, one sentence, one primary action (*Analyse an image*) with a secondary camera link, an illustration that is labelled as an illustration, a one-line description of the flow and a privacy footer |
 | **Detect** | Upload an image → *Analyse image* → count, mean confidence, original and annotated images, annotated-image download. Confidence/overlap thresholds sit in a collapsed **Advanced settings** panel. |
 | **Camera** | Browser snapshot → the same pipeline, one still frame per capture (no live video) |
 | **Help** | How it works, what the numbers mean, privacy, honest limitations |
@@ -109,22 +109,22 @@ workflow.
 
 The interface is a small design system rather than per-page styling:
 
-- `app/ui/theme.py` — design tokens and one shared stylesheet (off-white canvas,
-  charcoal type, restrained teal accent, consistent radii and hover/active states).
-- `app/ui/icons.py` — one inline SVG family (Lucide geometry): 24px grid, 2px
-  stroke, round caps and joins, three context sizes (16 / 20 / 24), colour
-  inherited from the tokens. No emoji and no second icon style in page content.
-- `app/ui/components.py` — reusable primitives: hero, page header, sections, status
-  pills, notes, empty states, steps, key/value strips, footer.
+- `app/ui/theme.py` — design tokens and one shared stylesheet: a warm off-white
+  canvas, charcoal ink, one teal accent used only for interaction, an 8-step
+  spacing scale (`--jd-1` … `--jd-8`, 4–64 px), an 8-step type scale, hairline
+  rules instead of cards, and no tinted resting surfaces.
+- `app/ui/components.py` — the primitives each page is built from: page header,
+  section label, note, empty state, plus ordered steps, bullets, key/value rows,
+  the workflow line and the footer. No icons, no cards, no pills.
 - `app/ui/nav.py` — the four consumer destinations via Streamlit's own
   `st.navigation`.
 
-Streamlit's `st.Page(icon=...)` accepts only an emoji or `:material/name:`, so the
-navigation uses the closest Material Symbols Rounded glyph. Everything inside the
-pages is Lucide. Replacing the native navigation with hand-written links would cost
-URL routing, keyboard support and the mobile drawer, which is not a trade worth
-making for icon appearance. `tests/test_ui_icons.py` keeps Material confined to
-`nav.py` and enforces the icon rules.
+Icons appear in exactly one place: the four navigation entries, because
+`st.Page(icon=...)` accepts only an emoji or `:material/name:` and the drawer is
+where a glyph earns its keep. Page content uses type, alignment and hairlines
+instead, so there is no icon set to keep consistent. Replacing the native
+navigation with hand-written links would cost URL routing, keyboard support and the
+mobile drawer.
 
 The interface is split by audience. End users only ever see the workflow: no weights
 paths, dependency names, registry vocabulary, dataset statistics or evaluation
@@ -148,7 +148,7 @@ judetector/
 │   ├── main.py                  # entry point + navigation
 │   ├── views/                   # Home, Detect, Camera, Help, Developer
 │   ├── components/              # shared UI: pipeline, workflow, results, settings
-│   ├── ui/                      # design system: theme, icons, components, navigation
+│   ├── ui/                      # design system: theme, components, navigation
 │   └── core/                    # Streamlit-free logic
 │       ├── config.py            # paths, defaults, env overrides
 │       ├── detector.py          # Detector interface + UltralyticsDetector

@@ -149,43 +149,64 @@ def _run_main() -> AppTest:
 def test_main_entry_point_opens_the_landing_page():
     at = _run_main()
     text = _page_text(at)
-    assert "A clearer way to explore your images." in text
-    assert "IMAGE ANALYSIS, SIMPLIFIED" in text
+    assert "See exactly what the model sees." in text
+    assert "Upload a photo or take a snapshot" in text
 
 
 # --------------------------------------------------------------------------
 # Landing page
 # --------------------------------------------------------------------------
-def test_home_hero_copy_and_calls_to_action(tmp_path):
+def test_home_is_one_headline_one_sentence_one_action(tmp_path):
     at = _run_page(tmp_path, "home")
     text = _page_text(at)
-    assert "A clearer way to explore your images." in text
-    assert "IMAGE ANALYSIS, SIMPLIFIED" in text
-    assert "Upload a photo, analyse it with the configured detection model" in text
-    assert [button.label for button in at.button] == ["Start detecting", "Try camera"]
+    assert "See exactly what the model sees." in text
+    assert "Upload a photo or take a snapshot" in text
+    # Exactly one button, and it is the primary action.
+    assert [button.label for button in at.button] == ["Analyse an image"]
     assert at.button[0].proto.type == "primary"
 
 
-def test_home_preview_is_illustrative_not_fabricated_output(tmp_path):
+def test_home_has_no_marketing_scaffolding(tmp_path):
+    """The landing-page formula is deliberately absent."""
+    at = _run_page(tmp_path, "home")
+    visible = _visible_text(at)
+    lowered = visible.lower()
+    for phrase in (
+        "image analysis, simplified",
+        "get started free",
+        "trusted by",
+        "powered by ai",
+        "state of the art",
+        "cutting-edge",
+        "seamless",
+        "revolutionary",
+        "supercharge",
+        "unlock",
+        "effortless",
+    ):
+        assert phrase not in lowered, f"marketing phrase on Home: {phrase!r}"
+    # One primary action, not a pair of competing CTAs, and no emoji headings.
+    assert len(at.button) == 1
+    assert not re.search(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]", visible)
+
+
+def test_home_illustration_is_declared_as_an_illustration(tmp_path):
     at = _run_page(tmp_path, "home")
     text = _page_text(at)
-    assert "Illustrative preview" in text
-    assert "not model output" in text
-    assert "Original" in text and "Analysed" in text
+    assert "Illustration, not a detection result." in text
     # No invented scores, counts, timings or percentages anywhere on the page.
-    # (The ordered steps legitimately number themselves 1–3.)
     visible = _visible_text(at)
     assert "%" not in visible
     assert not re.search(r"\d+(\.\d+)?\s*(ms|fps|faces?|detections?)\b", visible, re.I)
-    assert "confidence" not in visible.lower()
+    lowered = visible.lower()
+    assert "confidence" not in re.sub(r"confidence score", "", lowered)
 
 
-def test_home_shows_three_ordered_steps(tmp_path):
+def test_home_states_the_flow_in_one_line(tmp_path):
     at = _run_page(tmp_path, "home")
     text = _page_text(at)
-    for title in ("Upload or capture an image", "Analyse the image", "Review and download"):
-        assert title in text
-    assert "How it works" in text
+    assert "Upload or capture, analyse, then download the annotated image." in text
+    assert "How it works" not in text
 
 
 def test_home_footer_has_brand_privacy_and_help_link(tmp_path):
@@ -194,26 +215,27 @@ def test_home_footer_has_brand_privacy_and_help_link(tmp_path):
     assert "JUDEtector" in text
     assert "never stored" in text
     assert "Detection is not recognition" in text
-    assert [link.label for link in at.get("page_link")] == ["Help"]
+    assert [link.label for link in at.get("page_link")] == ["Use the camera instead", "Help"]
 
 
-@pytest.mark.parametrize(
-    ("label", "expected_page", "marker"),
-    [
-        ("Start detecting", "detect", "file_uploader"),
-        ("Try camera", "camera", "camera_input"),
-    ],
-)
-def test_hero_cta_navigates_to_its_destination(label, expected_page, marker):
-    """Clicking a CTA in the running app must land on that page."""
+def test_help_page_explains_the_flow_in_three_steps(tmp_path):
+    at = _run_page(tmp_path, "help")
+    text = _page_text(at)
+    for title in ("Upload or capture", "Analyse", "Review and download"):
+        assert title in text
+    assert "How it works" in text
+
+
+def test_primary_action_navigates_to_detect():
+    """Clicking the landing action in the running app must land on Detect."""
     at = _run_main()
     labels = [button.label for button in at.button]
-    assert label in labels
+    assert "Analyse an image" in labels
 
-    at.button[labels.index(label)].click().run()
+    at.button[labels.index("Analyse an image")].click().run()
     assert not at.exception, at.exception
-    assert at.get(marker), f"'{label}' did not land on a page with {marker}"
-    assert "A clearer way to explore your images." not in _page_text(at)
+    assert at.file_uploader, "'Analyse an image' did not land on a page with an uploader"
+    assert "See exactly what the model sees." not in _page_text(at)
 
 
 def test_sidebar_carries_no_model_diagnostics():
@@ -245,6 +267,9 @@ def test_home_has_no_technical_detail(tmp_path):
 def test_detect_offers_an_upload_control_and_no_technical_detail(tmp_path):
     at = _run_page(tmp_path, "detect")
     assert len(at.file_uploader) == 1
+    assert at.file_uploader[0].label == "Image file"
+    # Secondary controls stay out of the way until an image exists.
+    assert len(at.get("expander")) == 0
     text = _interactive_text(at)
     for term in TECHNICAL_TERMS:
         assert term not in text, f"'{term}' appears in the user-facing Detect page"
@@ -257,8 +282,12 @@ def test_detect_explains_accepted_files_and_size_limit(tmp_path):
     assert "25 MB" in text
 
 
-def test_detect_moves_thresholds_into_a_collapsed_advanced_panel(tmp_path):
+def test_detect_moves_thresholds_into_a_collapsed_advanced_panel(tmp_path, png_bytes):
     at = _run_page(tmp_path, "detect")
+    # Nothing to configure until there is an image to analyse.
+    assert len(at.get("expander")) == 0
+
+    at.file_uploader[0].upload("sample.png", png_bytes, "image/png").run()
     expanders = list(at.expander)
     assert len(expanders) == 1
     assert expanders[0].label == "Advanced settings"
@@ -378,11 +407,13 @@ def test_detect_fabricates_nothing_when_analysis_is_unavailable(tmp_path, png_by
 # Camera
 # --------------------------------------------------------------------------
 def test_camera_offers_snapshot_capture_only(tmp_path):
+    """One frame per capture, stated once, with no settings competing for attention."""
     at = _run_page(tmp_path, "camera")
     assert len(at.camera_input) == 1
     text = _page_text(at)
-    assert "No snapshot yet" in text
-    assert "live video is not analysed" in text
+    assert "One still frame per capture. Live video is not analysed." in text
+    # The collapsed settings panel appears only once there is something to analyse.
+    assert len(at.get("expander")) == 0
 
 
 def test_camera_has_no_technical_detail(tmp_path):
@@ -426,7 +457,7 @@ def test_help_mentions_privacy(tmp_path):
 def test_developer_page_says_it_is_not_access_controlled(tmp_path):
     at = _run_page(tmp_path, "dev")
     text = (_page_text(at) + _texts(at.caption)).lower()
-    assert "not access-controlled" in text
+    assert "not protected by it" in text
     assert "anyone with the url" in text
 
 

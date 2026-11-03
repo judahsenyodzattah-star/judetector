@@ -70,12 +70,15 @@ in about two seconds.
 - Navigation is exactly Home, Detect, Camera, Help, with SVG (non-emoji) icons and
   Home as the single default route; the developer page is hidden from that list and
   routable at `/developer`.
-- The landing page shows the specified hero copy, both calls to action, a preview
-  labelled "Illustrative preview — not model output" (asserted to contain no
-  percentages or confidence figures), three ordered steps and a footer with the
-  wordmark, privacy line and a Help link.
-- Clicking *Start detecting* lands on a page with a file uploader; clicking *Try
-  camera* lands on a page with a camera input.
+- The landing page holds one headline, one supporting sentence, one primary button
+  (*Analyse an image*) plus a camera page link, an illustration labelled
+  "Illustration, not a detection result.", a single line describing the flow and a
+  footer with the wordmark, privacy line and a Help link. No marketing vocabulary,
+  no second CTA pair, no emoji.
+- The illustration is asserted to carry no percentages, counts or confidence
+  figures, so no invented output can appear on the landing page.
+- Clicking *Analyse an image* lands on a page with a file uploader; the camera page
+  link is asserted to be present with its own label.
 - Detect exposes an uploader; thresholds live in one collapsed *Advanced settings*
   panel; nothing is analysed until *Analyse image* is pressed.
 - **End-to-end:** an uploaded image with a fake model produces `Detections = 2`,
@@ -91,22 +94,31 @@ in about two seconds.
 - Help carries the three-step workflow, the privacy statement and the
   detection-is-not-recognition limitation.
 
-### Icons — `tests/test_ui_icons.py`
-- Every glyph is on the 24px grid, has a single 2px stroke, round caps/joins,
-  `currentColor` and `aria-hidden`.
-- Sizes are restricted to the 16 / 20 / 24 scale, both in the module and at every
-  call site.
-- Material glyphs may only appear in `nav.py`; the rest of the app is Lucide.
-- No emoji anywhere in the application source.
+### Icons — inside `tests/test_app_smoke.py`
+- Icons exist only on the four navigation entries; Material glyphs may appear in
+  `nav.py` and nowhere else (`icon\s*=\s*["']:material/` scan).
+- No emoji anywhere in the application source, headings or navigation.
 
 ### Styles — `tests/test_ui_styles.py`
-- Every text/background token pair meets WCAG AA (4.5:1); the uploader border meets
-  the 3:1 non-text threshold.
-- The uploader uses a neutral surface, never a saturated fill, and defines hover,
-  focus and disabled states.
+- Every text/background token pair meets WCAG AA (4.5:1); the uploader border and
+  the illustration outline meet the 3:1 non-text threshold.
+- Uploader regression guard: the surface is white both in `.streamlit/config.toml`
+  (`secondaryBackgroundColor`, the token Streamlit actually paints the dropzone
+  with) and in the dropzone rule, and the label, instructions and browse-button
+  colours are each asserted against white rather than against the surface as a
+  whole.
+- Teal is banned from resting surfaces: any rule using `--jd-accent-tint` must be a
+  `:hover` or `:focus` rule. Hover, focus-within and disabled states must exist.
+- The type scale is exactly eight steps (0.78–2.75 rem), so an off-scale
+  `font-size` fails the build.
+- No surface token may have green as its dominant channel.
 - Every `data-testid` in the stylesheet is asserted against the installed Streamlit
   bundle, so a Streamlit upgrade that renames a hook fails the suite instead of
   silently dropping styles.
+- The root cause of the reported green-surface defect is pinned to the installed
+  bundle: the dropzone `<section>` uses `theme.colors.secondaryBg` and its
+  instructions use the faded grey token. If Streamlit changes either, the test fails
+  rather than the fix silently lapsing.
 - `.streamlit/config.toml` colours must match the design tokens.
 - The landing illustration is drawn from palette tokens and its outline clears the
   3:1 non-text threshold.
@@ -120,7 +132,7 @@ in about two seconds.
 ## Current result
 
 ```
-232 passed
+192 passed
 ```
 
 Test counts by module are reported in the pull request. UI tests are marked `ui` and
