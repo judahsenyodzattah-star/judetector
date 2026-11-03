@@ -1,8 +1,11 @@
 """Reusable interface primitives.
 
-Every page composes these instead of hand-rolling markup, which is what keeps the
-visual language consistent. Any dynamic value interpolated into HTML is escaped;
-the only unescaped content is the trusted static icon markup from `app.ui.icons`.
+The vocabulary here is intentionally small: a page header, an editorial headline,
+a section label, a note, an empty state, ordered steps, key/value rows and a
+footer. No icon set, no cards, no pills. Hierarchy comes from type, alignment and
+hairline rules, which is what keeps the pages feeling like one product.
+
+Any dynamic value interpolated into HTML is escaped.
 """
 
 from __future__ import annotations
@@ -12,24 +15,19 @@ from html import escape
 
 import streamlit as st
 
-from app.ui.icons import ICON_INLINE, ICON_UI, svg
-
 __all__ = [
-    "PILL_TONES",
     "bullets",
+    "display_headline",
     "empty_state",
     "footer",
-    "hero",
     "kv_row",
     "meta",
     "note",
     "page_header",
     "section",
-    "status_pill",
     "steps",
+    "workflow_line",
 ]
-
-PILL_TONES = {"ok": "jd-pill--ok", "warn": "jd-pill--warn", "muted": "jd-pill--muted"}
 
 
 def _html(markup: str) -> None:
@@ -37,57 +35,29 @@ def _html(markup: str) -> None:
 
 
 # --------------------------------------------------------------------------
-# Header
+# Headings
 # --------------------------------------------------------------------------
-def page_header(
-    title: str,
-    subtitle: str | None = None,
-    *,
-    eyebrow: str = "JUDEtector",
-    eyebrow_icon: str = "scan",
-    status: tuple[str, str] | None = None,
-) -> None:
-    """Page title block: optional eyebrow, title, one-line subtitle."""
-    pill = f"<div>{status_pill(*status)}</div>" if status else ""
+def page_header(title: str, subtitle: str | None = None) -> None:
+    """Page title plus one supporting line."""
     subtitle_html = f'<p class="jd-sub">{escape(subtitle)}</p>' if subtitle else ""
-    eyebrow_html = (
-        f'<div class="jd-eyebrow">{svg(eyebrow_icon, ICON_INLINE)}{escape(eyebrow)}</div>'
-        if eyebrow
-        else ""
-    )
     _html(
         '<div class="jd-head">'
-        '<div class="jd-head-row">'
-        "<div>"
-        f"{eyebrow_html}"
         f'<h1 class="jd-h1">{escape(title)}</h1>'
         f"{subtitle_html}"
         "</div>"
-        f"{pill}"
-        "</div>"
-        "</div>"
     )
 
 
-def hero(
-    title: str,
-    lede: str,
-    *,
-    eyebrow: str,
-    eyebrow_icon: str = "scan",
-) -> None:
-    """Landing-page hero: small eyebrow, large headline, one supporting line."""
+def display_headline(title: str, intro: str) -> None:
+    """Landing-page headline with a single supporting sentence."""
     _html(
-        '<div class="jd-hero">'
-        f'<div class="jd-hero__eyebrow">{svg(eyebrow_icon, ICON_INLINE)}{escape(eyebrow)}</div>'
-        f'<h1 class="jd-hero__title">{escape(title)}</h1>'
-        f'<p class="jd-hero__lede">{escape(lede)}</p>'
-        "</div>"
+        f'<h1 class="jd-display">{escape(title)}</h1>'
+        f'<p class="jd-intro">{escape(intro)}</p>'
     )
 
 
 def section(title: str, subtitle: str | None = None) -> None:
-    """Section divider with an optional short caption."""
+    """Section label: hairline rule and small caps. Replaces card headers."""
     sub = f'<p class="jd-section__sub">{escape(subtitle)}</p>' if subtitle else ""
     _html(
         f'<div class="jd-section"><p class="jd-section__title">{escape(title)}</p>{sub}</div>'
@@ -95,66 +65,44 @@ def section(title: str, subtitle: str | None = None) -> None:
 
 
 # --------------------------------------------------------------------------
-# Small pieces
+# Text pieces
 # --------------------------------------------------------------------------
-def status_pill(label: str, tone: str = "muted") -> str:
-    """Return the HTML for a status pill (`ok`, `warn`, `muted`)."""
-    css = PILL_TONES.get(tone, PILL_TONES["muted"])
-    return (
-        f'<span class="jd-pill {css}"><span class="jd-pill__dot"></span>{escape(label)}</span>'
-    )
-
-
-def note(text: str, *, tone: str = "info", icon: str = "info") -> None:
-    """Compact inline notice. Used instead of full-width alert banners."""
+def note(text: str, *, tone: str = "info") -> None:
+    """Quiet inline notice: a rule and a sentence, never a banner."""
     tone_css = {"warn": "jd-note--warn", "ok": "jd-note--ok"}.get(tone, "")
-    _html(
-        f'<div class="jd-note {tone_css}">{svg(icon, ICON_INLINE)}<div>{escape(text)}</div></div>'
-    )
+    _html(f'<div class="jd-note {tone_css}">{escape(text)}</div>')
 
 
-def empty_state(*, icon: str, title: str, body: str) -> None:
-    """Purposeful empty state: says what is missing and what to do next."""
+def empty_state(*, title: str, body: str) -> None:
+    """Left-aligned statement of what is missing and what to do next."""
     _html(
         '<div class="jd-empty">'
-        f'<div class="jd-empty__icon">{svg(icon, ICON_UI)}</div>'
         f'<p class="jd-empty__title">{escape(title)}</p>'
         f'<p class="jd-empty__body">{escape(body)}</p>'
         "</div>"
     )
 
 
-def steps(
-    items: Sequence[tuple[str, str, str]],
-    *,
-    grid: bool = False,
-) -> None:
-    """Ordered ``(icon, title, body)`` steps.
-
-    ``grid=True`` lays them out horizontally for the landing page; the default is a
-    vertical list for reference-style pages.
-    """
+def steps(items: Sequence[tuple[str, str]]) -> None:
+    """Ordered ``(title, body)`` steps as a numbered text list."""
     rendered = "".join(
         '<div class="jd-step">'
         f'<div class="jd-step__num">{index}</div>'
-        f'<div class="jd-step__body"><b>{escape(title)}</b>'
-        f"<span>{escape(body)}</span></div>"
-        f'<div class="jd-step__icon">{svg(icon_name, ICON_UI)}</div>'
+        f'<div class="jd-step__body"><b>{escape(title)}</b><span>{escape(body)}</span></div>'
         "</div>"
-        for index, (icon_name, title, body) in enumerate(items, start=1)
+        for index, (title, body) in enumerate(items, start=1)
     )
-    layout = "jd-steps jd-steps--grid" if grid else "jd-steps"
-    _html(f'<div class="{layout}">{rendered}</div>')
+    _html(f'<div class="jd-steps">{rendered}</div>')
 
 
 def bullets(items: Sequence[str]) -> None:
-    """Tight bulleted list for limitations and privacy notes."""
+    """Tight bulleted list for limits and privacy notes."""
     rendered = "".join(f"<li>{escape(item)}</li>" for item in items)
     _html(f'<ul class="jd-list">{rendered}</ul>')
 
 
 def kv_row(items: Sequence[tuple[str, str]]) -> None:
-    """Horizontal key/value strip (label above value)."""
+    """Key/value strip (label above value) for technical readouts."""
     rendered = "".join(
         f'<div class="jd-kv__item">{escape(label)}<b>{escape(value)}</b></div>'
         for label, value in items
@@ -167,24 +115,27 @@ def meta(text: str) -> None:
     _html(f'<p class="jd-meta">{escape(text)}</p>')
 
 
+def workflow_line(text: str) -> None:
+    """One-line description of the flow, used under the landing fold."""
+    _html(f'<p class="jd-workflow">{escape(text)}</p>')
+
+
 # --------------------------------------------------------------------------
 # Footer
 # --------------------------------------------------------------------------
 def footer(note: str, *, page, page_label: str = "Help") -> None:
-    """Minimal branded footer: wordmark, one privacy line, one page link.
+    """Single-row footer: wordmark, one privacy line, one real page link.
 
-    The link is rendered with `st.page_link`, so it is a real anchor — keyboard
-    accessible and routable — rather than raw HTML.
+    The link is rendered with `st.page_link`, so it is a genuine anchor rather than
+    raw HTML.
     """
-    body = (
-        '<div class="jd-footer">'
-        f'<div class="jd-footer__brand"><span class="jd-footer__mark">{svg("scan", ICON_INLINE)}'
-        "</span>JUDEtector</div>"
-        f'<p class="jd-footer__note">{escape(note)}</p>'
-        "</div>"
-    )
     text_column, link_column = st.columns([5, 1], gap="small", vertical_alignment="center")
     with text_column:
-        _html(body)
+        _html(
+            '<div class="jd-footer">'
+            '<p class="jd-footer__brand">JUDEtector</p>'
+            f'<p class="jd-footer__note">{escape(note)}</p>'
+            "</div>"
+        )
     with link_column:
         st.page_link(page, label=page_label, icon=None)
