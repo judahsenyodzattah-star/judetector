@@ -1,10 +1,11 @@
-"""JUDEtector — Streamlit entry point.
+"""JUDEtector — application entry point.
 
 Run locally with:
 
     streamlit run app/main.py
 
-Navigation is declared here; each page is a `render()` callable in `app/views/`.
+Navigation is declared in `app/ui/nav.py`; each page is a `render()` callable in
+`app/views/`.
 """
 
 from __future__ import annotations
@@ -19,30 +20,28 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.components.model_sidebar import render_sidebar_footer  # noqa: E402
-from app.views import about, camera, dashboard, detect, home  # noqa: E402
+from app.components.model_sidebar import render_sidebar_status  # noqa: E402
+from app.ui.nav import PAGES  # noqa: E402
 
 __all__ = ["main"]
 
 
 def main() -> None:
     st.set_page_config(
-        page_title="JUDEtector — AI Object Detection",
-        page_icon="🔎",
+        page_title="JUDEtector",
         layout="wide",
         initial_sidebar_state="expanded",
     )
 
-    pages = [
-        st.Page(home.render, title="Home", icon="🏠", url_path="home", default=True),
-        st.Page(detect.render, title="Detect", icon="🖼️", url_path="detect"),
-        st.Page(camera.render, title="Camera", icon="📷", url_path="camera"),
-        st.Page(dashboard.render, title="Dashboard", icon="📊", url_path="dashboard"),
-        st.Page(about.render, title="About", icon="ℹ️", url_path="about"),
-    ]
+    # Each page applies the shared stylesheet, so the theme travels with the page
+    # rather than leaking from the entry point.
 
-    st.navigation(pages).run()
-    render_sidebar_footer()
+    # The navigation block renders at the top of the sidebar; the read-only model
+    # status sits beneath it. Model *controls* deliberately live on the workspace
+    # pages, not in the navigation rail.
+    page = st.navigation(PAGES)
+    render_sidebar_status()
+    page.run()
 
 
 main()
