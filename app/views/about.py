@@ -1,181 +1,155 @@
-"""About page: project, student, model, dataset, limitations and ethics."""
+"""About: product information, privacy and model limitations.
+
+No academic or submission details appear here — and none appear anywhere else in
+the user-facing application.
+"""
 
 from __future__ import annotations
 
 import streamlit as st
 
-from app.components.model_sidebar import select_model
-from app.components.status import render_labels_line
-from app.core import config
+from app.components.model_sidebar import current_model
 from app.core.runtime import get_detector
+from app.ui.components import (
+    bullets,
+    empty_state,
+    kv_row,
+    meta,
+    note,
+    page_header,
+    section,
+    tiles,
+)
+from app.ui.theme import inject_theme
 
 __all__ = ["render"]
 
+_CAPABILITY_TILES = [
+    (
+        "scan",
+        "Image and camera detection",
+        "Runs the connected model over uploaded images and single-frame camera captures.",
+    ),
+    (
+        "target",
+        "Boxes and confidence",
+        "Every result carries a bounding box, a class label and the model's confidence score.",
+    ),
+    (
+        "sliders",
+        "Adjustable thresholds",
+        "Confidence and IoU are configurable per analysis, with the applied values shown.",
+    ),
+    (
+        "chart",
+        "Recorded analytics",
+        "Evaluation results are displayed as recorded; session activity is summarised separately.",
+    ),
+]
+
 
 def render() -> None:
-    st.title("About JUDEtector")
+    inject_theme()
 
-    spec, model_error = select_model()
+    spec, model_error = current_model()
+    connected = bool(spec is not None and spec.weights_present)
+
+    page_header(
+        "About",
+        "What this workspace does, how it handles your images, and where the model's "
+        "limits are.",
+        eyebrow="Product",
+        status=("Model connected", "ok") if connected else ("Model not connected", "warn"),
+    )
+
+    section("What it is")
+    st.markdown(
+        "JUDEtector is a computer-vision workspace for object detection. It runs a "
+        "trained Ultralytics YOLO model over an image or a camera snapshot and returns "
+        "bounding boxes, a detection count and a confidence score per detection. The "
+        "detector sits behind a model-agnostic interface, so a different model can be "
+        "registered without changing the interface."
+    )
+
+    section("Capabilities")
+    tiles(_CAPABILITY_TILES)
+
+    section("Privacy")
+    bullets(
+        [
+            "Images are decoded and analysed in memory for the request only; nothing is written to disk.",
+            "Session analytics store filenames, counts and timings — never image content.",
+            "No account, upload history or third-party analytics are used.",
+            "Only process images of people who know their image is being analysed.",
+        ]
+    )
+
+    section("Detection is not recognition")
+    st.markdown(
+        "This system locates objects. It does not identify people, compare faces against "
+        "a gallery or build identity profiles, and it must not be used for surveillance "
+        "or access-control decisions."
+    )
+
+    section("Model limitations")
     if model_error:
-        st.error(f"Model configuration problem: {model_error}")
-
-    st.subheader("Project")
-    st.markdown(
-        """
-**JUDEtector** is an academic AI object-detection web application developed as part
-of a BSc Information Technology programme at Pentecost University.
-
-Its purpose is to demonstrate a complete, reproducible pipeline: a trained
-Ultralytics YOLO model served through a modular Python/Streamlit application, with
-image upload, browser camera capture, bounding-box visualisation, per-detection
-confidence scores, and an honest performance dashboard.
-"""
-    )
-
-    st.subheader("Student")
-    st.markdown(
-        """
-| | |
-|---|---|
-| **Name** | Senyo-Dzattah Judah Agbemavor |
-| **Student ID** | PUIT/23110016 |
-| **Programme** | BSc Information Technology |
-| **Institution** | Pentecost University |
-"""
-    )
-
-    st.subheader("Model information")
-    if spec is None:
-        st.info("No model is currently configured.")
-    else:
-        detector = get_detector(spec)
-        info = detector.model_info()
-        st.markdown(
-            f"""
-- **Active model:** {spec.display_name} (`{spec.id}`)
-- **Task:** {spec.task}
-- **Kind:** {spec.kind} · general-purpose face detector: **{'yes' if spec.is_general_purpose else 'no'}**
-- **Weights path:** `{spec.weights_path}`
-- **Weights present on disk:** {'yes' if info['weights_present'] else 'no'}
-- **Labels source:** {info['labels_source']}
-"""
-        )
-        render_labels_line(tuple(info["labels"]), info["labels_source"])
-        if spec.description:
-            st.caption(spec.description)
-
-    st.subheader("Dataset information")
-    if spec is not None and spec.dataset:
-        dataset = spec.dataset
-        split = dataset.get("split") or {}
-        st.markdown(
-            f"""
-| Property | Value |
-|---|---|
-| Dataset | {(spec.provenance or {}).get('dataset_name', '—')} |
-| Total images | {dataset.get('total_images', '—')} |
-| Annotated images | {dataset.get('annotated_images', '—')} |
-| Reserved, not yet annotated | {dataset.get('unannotated_reserved', '—')} |
-| Classes | {', '.join(dataset.get('classes') or []) or '—'} |
-| Train / Val / Test | {split.get('train', '—')} / {split.get('val', '—')} / {split.get('test', '—')} |
-"""
-        )
-        st.caption(
-            "These dataset figures are declared by the project author from the Ultralytics "
-            "dataset record. The dataset itself is not stored in this repository."
+        note(model_error, tone="warn", icon="alert-circle")
+    elif spec is None:
+        empty_state(
+            icon="cpu",
+            title="No model configured",
+            body="Register a detector in config/models.json to enable detection.",
         )
     else:
-        st.info("No dataset information is recorded for the active model.")
+        limitations = [
+            "Subject-specific: the bundled model is trained on a single class, so detections describe that subject only, not faces in general.",
+            "Not a validated general-purpose face detector, and not a face-recognition system.",
+            "No recorded evaluation metrics yet — performance figures are shown only when a real evaluation run is recorded.",
+            "Small training set, so accuracy on unfamiliar subjects, lighting or poses is expected to be weaker.",
+            "Camera capture is single-frame; continuous live video is not supported.",
+            "CPU inference, so latency is higher than a GPU deployment and very large images are downscaled.",
+        ]
+        bullets(limitations)
+        if spec.is_general_purpose:
+            note("This model is registered as general purpose.", tone="ok", icon="check-circle")
+        else:
+            note(
+                "Its declared classes are "
+                f"{', '.join(spec.declared_labels) or 'none'}; outputs are limited to those.",
+                tone="warn",
+                icon="alert-triangle",
+            )
 
-    st.subheader("Limitations")
+    with st.expander("Model details", expanded=False):
+        if spec is None:
+            meta("No model is configured.")
+        else:
+            detector = get_detector(spec)
+            info = detector.model_info()
+            kv_row(
+                [
+                    ("Model", spec.display_name),
+                    ("Task", spec.task),
+                    ("Kind", spec.kind.replace("_", " ")),
+                    ("Weights", "present" if info["weights_present"] else "missing"),
+                ]
+            )
+            meta(f"Class labels: {', '.join(info['labels']) if info['labels'] else 'unknown'}")
+            if spec.dataset:
+                dataset = spec.dataset
+                split = dataset.get("split") or {}
+                meta(
+                    f"Dataset: {dataset.get('dataset_name') or (spec.provenance or {}).get('dataset_name', '—')} · "
+                    f"{dataset.get('total_images', '—')} images · "
+                    f"{dataset.get('annotated_images', '—')} annotated · "
+                    f"{split.get('train', '—')}/{split.get('val', '—')}/{split.get('test', '—')} split"
+                )
+            if spec.provenance.get("training_status"):
+                meta(str(spec.provenance["training_status"]))
+
+    section("Technology")
     st.markdown(
-        """
-- **Subject-specific model.** The currently registered model was trained on a single
-  class (`judah`) from a small dataset of 711 images. It is **not** a validated
-  general-purpose face detector, and its detections should not be interpreted as
-  "any human face detected".
-- **No published evaluation metrics yet.** The dashboard shows no metrics until a real
-  evaluation record is supplied. Absence of numbers is deliberate: nothing is invented.
-- **Small dataset.** With 675 annotated images across three splits, generalisation is
-  limited, and per-class accuracy on unfamiliar subjects is expected to be poor.
-- **Camera is snapshot-based.** Continuous live video is not implemented in this
-  milestone; WebRTC streaming needs additional infrastructure and HTTPS/STUN support.
-- **CPU-only inference.** Hosted deployments run on CPU, so detection is slower than a
-  GPU and very large images are downscaled before inference.
-- **Not for identification.** The system detects boxes; it does not recognise or
-  identify people, and it is not suitable for surveillance or access-control decisions.
-"""
-    )
-
-    st.subheader("Ethical considerations")
-    st.markdown(
-        """
-**Detection is not recognition.** JUDEtector only answers *"is something detected
-here, and where?"*. It does not perform face recognition, does not build identity
-profiles, and does not match faces against any gallery. These are different tasks with
-very different privacy consequences.
-
-**Consent and privacy.** Any image of a person should only be processed with that
-person's knowledge and consent. Uploaded images in this application are processed in
-memory for the duration of the request; the app does not persist uploads to disk or
-write them to a database. Session statistics record filenames and counts, not image
-content.
-
-**Dataset provenance.** Future training data must respect the licence of its source.
-For example, benchmark face datasets are typically released for non-commercial
-research use and may prohibit redistribution — which is why this repository ships
-configuration and scripts, not datasets or weights.
-
-**Bias and fairness.** Face-detection performance varies with skin tone, lighting,
-pose, occlusion and image quality. A model trained on a small, single-subject dataset
-will reflect the conditions of that data. Performance claims must be reported against
-the data actually used, and re-evaluated before any new demographic or lighting
-context.
-
-**Academic honesty.** Every number displayed in this application is either declared
-dataset metadata or a recorded evaluation result. Where evidence does not exist, the
-interface says so rather than filling the gap.
-"""
-    )
-
-    st.subheader("Technology")
-    st.markdown(
-        """
-| Layer | Choice |
-|---|---|
-| Language | Python |
-| Web framework | Streamlit |
-| Detection | Ultralytics YOLO (loaded lazily, PyTorch weights) |
-| Imaging | Pillow, NumPy |
-| Tables / charts | pandas, Streamlit primitives |
-| Tests | pytest, Streamlit `AppTest` |
-| Version control | Git + GitHub |
-
-The application is deliberately framework-thin beyond Streamlit: the model lives
-behind a `Detector` interface so a different detector can be registered without
-rewriting the interface.
-"""
-    )
-
-    st.subheader("Configuration")
-    st.markdown(
-        f"""
-| Setting | Value |
-|---|---|
-| Registry file | `{config.get_registry_path()}` |
-| Metrics directory | `{config.get_metrics_dir()}` |
-| Default confidence | {config.DEFAULT_CONFIDENCE} |
-| Default IoU | {config.DEFAULT_IOU} |
-| Max upload size | {config.MAX_UPLOAD_MB} MB |
-| Max image dimension | {config.MAX_IMAGE_DIMENSION} px |
-
-Environment overrides: `JUDETECTOR_REGISTRY`, `JUDETECTOR_METRICS_DIR`,
-`JUDETECTOR_MODEL_PATH`.
-"""
-    )
-
-    st.divider()
-    st.caption(
-        "JUDEtector · Milestone 1 (application foundation) · "
-        "Senyo-Dzattah Judah Agbemavor · PUIT/23110016"
+        "Python · Streamlit interface · Ultralytics YOLO detection · Pillow rendering · "
+        "pandas tables. The model layer is optional at runtime: the application starts "
+        "and remains navigable without any weights installed."
     )

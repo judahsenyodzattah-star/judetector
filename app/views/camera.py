@@ -1,10 +1,14 @@
-"""Camera page: browser snapshot → detection (continuous video is out of scope)."""
+"""Camera: browser snapshot capture → detection.
+
+Snapshot only. Continuous video would need a WebRTC component and reachable
+STUN/TURN servers, so it is deliberately out of scope and never claimed.
+"""
 
 from __future__ import annotations
 
 import streamlit as st
 
-from app.components.model_sidebar import render_settings, select_model
+from app.components.model_sidebar import detection_settings
 from app.components.pipeline import analyse_image
 from app.components.results import (
     render_detection_table,
@@ -21,16 +25,25 @@ from app.core.errors import InvalidImageError
 from app.core.image_io import describe_image, downscale, load_image
 from app.core.runtime import get_detector
 from app.core.stats import DetectionRun, record_run_once
+from app.ui.components import empty_state, meta, note, page_header, section
+from app.ui.theme import inject_theme
 
 __all__ = ["render"]
 
 
 def render() -> None:
-    st.title("Camera")
-    st.caption("Capture a browser camera snapshot and analyse it with the active model.")
+    inject_theme()
 
-    spec, model_error = select_model()
-    confidence, iou = render_settings()
+    spec, confidence, iou, model_error = detection_settings()
+    connected = bool(spec is not None and spec.weights_present)
+
+    page_header(
+        "Camera",
+        "Capture a single frame from the browser camera and analyse it with the "
+        "connected model.",
+        eyebrow="Workspace",
+        status=("Model connected", "ok") if connected else ("Model not connected", "warn"),
+    )
 
     if model_error:
         st.error(f"Model configuration problem: {model_error}")
@@ -41,25 +54,45 @@ def render() -> None:
     render_model_caption(spec)
     render_scope_warning(spec)
 
-    st.info(
-        "**Snapshot mode.** The browser captures a single still frame, which is then "
-        "analysed exactly like an uploaded image. Continuous live video is not part "
-        "of this milestone — see the note below.",
-        icon="📷",
+    note(
+        "Snapshot capture: one still frame per shot, analysed exactly like an upload. "
+        "Live video detection is not supported.",
+        icon="camera",
     )
 
-    snapshot = st.camera_input(
-        "Take a snapshot",
-        help="Requires browser camera permission. Works over HTTPS or on localhost.",
-    )
+    if not connected:
+        note(
+            "Detection is unavailable until model weights are connected. Capture still "
+            "works for previewing framing.",
+            icon="alert-circle",
+            tone="warn",
+        )
+
+    capture_column, preview_column = st.columns([1, 1], gap="medium")
+
+    with capture_column:
+        st.markdown("**Camera**")
+        snapshot = st.camera_input(
+            "Take a snapshot",
+            help="Requires camera permission. Works over HTTPS or on localhost.",
+        )
+        if snapshot is None:
+            meta(
+                "No camera? Grant permission in the browser, serve the app over HTTPS or "
+                "localhost, then try again — or use Detect to upload an image."
+            )
+
+    with preview_column:
+        st.markdown("**Result**")
+        if snapshot is None:
+            empty_state(
+                icon="camera",
+                title="Awaiting capture",
+                body="Take a snapshot to see detections, confidence scores and the "
+                "annotated frame here.",
+            )
 
     if snapshot is None:
-        st.caption(
-            "If no camera appears: grant camera permission in the browser, ensure the "
-            "page is served over HTTPS (or on localhost), and check that no other "
-            "application is holding the camera. A laptop without a webcam will show "
-            "no capture control — use the **Detect** page instead."
-        )
         return
 
     try:
@@ -72,34 +105,29 @@ def render() -> None:
     detector = get_detector(spec)
     outcome = analyse_image(image, spec, detector, confidence=confidence, iou=iou)
 
-    original_column, processed_column = st.columns(2)
-    with original_column:
-        st.subheader("Snapshot")
-        st.image(image, width="stretch")
-        st.caption(describe_image(image))
-    with processed_column:
-        st.subheader("Processed")
-        if outcome.ok and outcome.processed is not None:
-            st.image(outcome.processed, width="stretch")
-            st.caption(f"{outcome.count} box(es) drawn · confidence ≥ {confidence:.2f}")
-        else:
-            st.info("No processed image: detection could not run.", icon="ℹ️")
-
     if not outcome.ok:
+        st.error(f"**{outcome.error_title}**\n\n{outcome.error_message}")
         if outcome.unavailable:
-            st.error(f"**{outcome.error_title}**\n\n{outcome.error_message}")
             render_setup_help(spec)
-        else:
-            st.error(f"**{outcome.error_title}**\n\n{outcome.error_message}")
         return
 
     result = outcome.result
     assert result is not None
 
-    st.divider()
+    section("Results", f"Snapshot · {describe_image(image)}")
     render_summary_metrics(result, spec)
     render_no_detections_note(result)
-    render_detection_table(result)
+
+    annotated_column, original_column = st.columns(2, gap="medium")
+    with annotated_column:
+        st.image(outcome.processed, caption="Annotated", width="stretch")
+    with original_column:
+        st.image(image, caption="Snapshot", width="stretch")
+
+    if result.detections:
+        section("Detections", "Sorted by confidence, with pixel coordinates.")
+        render_detection_table(result)
+
     if outcome.processed is not None:
         render_download_button(outcome.processed, "camera_snapshot.png")
 
@@ -129,15 +157,4 @@ def render() -> None:
             result.count,
         ),
     )
-
-    with st.expander("Why snapshot instead of live video?"):
-        st.markdown(
-            """
-Continuous live video in Streamlit requires a WebRTC component plus reachable
-STUN/TURN servers, and is unreliable on free hosting tiers. Snapshot capture uses
-the browser's native camera API, works wherever the app is served over HTTPS, and
-reuses the same detection pipeline — so the feature is genuinely available rather
-than nominally available. Live streaming can be added later as a separate page
-without changing `DetectorService`.
-"""
-        )
+    meta("Added to this session's activity.")

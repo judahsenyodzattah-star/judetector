@@ -1,107 +1,147 @@
-"""Home page: introduction, purpose and navigation."""
+"""Overview: the product landing workspace."""
 
 from __future__ import annotations
 
 import streamlit as st
 
-from app.components.model_sidebar import select_model
-from app.components.status import render_scope_warning
-from app.core.errors import RegistryError
-from app.core.runtime import get_registry
+from app.components.model_sidebar import current_model
+from app.components.status import render_scope_warning, render_setup_help
+from app.core.stats import get_runs, runs_to_records, summarise
+from app.ui.components import (
+    empty_state,
+    note,
+    page_header,
+    panel,
+    section,
+    tiles,
+)
+from app.ui.theme import inject_theme
 
 __all__ = ["render"]
 
+_CAPABILITIES = [
+    (
+        "image",
+        "Image detection",
+        "Upload a still image and get bounding boxes, a detection count and a confidence score for each result.",
+    ),
+    (
+        "camera",
+        "Camera capture",
+        "Take a browser snapshot and run the same pipeline. Single frames per capture, not live video.",
+    ),
+    (
+        "sliders",
+        "Threshold control",
+        "Adjust confidence and IoU per analysis. Lowering the threshold surfaces weaker candidates.",
+    ),
+    (
+        "download",
+        "Annotated export",
+        "Download the processed image as a PNG, with boxes and labels already drawn.",
+    ),
+    (
+        "chart",
+        "Session analytics",
+        "Review recorded evaluation results and this session's detection activity in one place.",
+    ),
+    (
+        "shirt-shield",
+        "In-memory processing",
+        "Images are processed for the request only. Nothing is written to disk or retained.",
+    ),
+]
+
+
+def _kv_markup(items: list[tuple[str, str]]) -> str:
+    """Key/value strip markup for use inside a panel."""
+    from html import escape
+
+    return '<div class="jd-kv">' + "".join(
+        f'<div class="jd-kv__item">{escape(label)}<b>{escape(value)}</b></div>'
+        for label, value in items
+    ) + "</div>"
+
+
+def _navigate(page_key: str) -> None:
+    # Imported lazily: `app.ui.nav` imports the views, so a module-level import here
+    # would be circular.
+    from app.ui.nav import PAGE
+
+    st.switch_page(PAGE[page_key])
+
 
 def render() -> None:
-    st.title("JUDEtector")
-    st.markdown(
-        "**An AI-powered object-detection web application** for image and camera "
-        "snapshot analysis, built on a trained Ultralytics YOLO model."
+    inject_theme()
+
+    spec, model_error = current_model()
+    runs = get_runs(st.session_state)
+    summary = summarise(runs)
+    connected = bool(spec is not None and spec.weights_present)
+
+    page_header(
+        "Overview",
+        "Run the connected detection model over images and camera snapshots, then "
+        "review confidence scores and session activity.",
+        eyebrow="Workspace",
+        status=("Model connected", "ok") if connected else ("Model not connected", "warn"),
     )
 
-    spec, model_error = select_model()
+    primary, secondary, _ = st.columns([1.05, 1, 1.7], gap="small")
+    with primary:
+        if st.button(
+            "Upload an image",
+            type="primary",
+            width="stretch",
+            icon=":material/upload:",
+        ):
+            _navigate("detect")
+    with secondary:
+        if st.button("Open camera", width="stretch", icon=":material/photo_camera:"):
+            _navigate("camera")
 
-    left, right = st.columns([3, 2])
-
-    with left:
-        st.subheader("What this application does")
-        st.markdown(
-            """
-Upload an image or take a camera snapshot, and JUDEtector runs a trained
-Ultralytics YOLO detector over it. You get the annotated image, the number of
-detections, and the confidence score for every detection.
-
-- **Detect** — upload an image, tune the confidence threshold, inspect boxes and scores.
-- **Camera** — capture a browser snapshot and analyse it with the same pipeline.
-- **Dashboard** — model details, recorded evaluation metrics and session statistics.
-- **About** — project background, dataset details, limitations and ethics.
-
-Nothing is analysed until you provide an image. When weights are unavailable the
-app says so and produces **no** detections rather than guessing.
-"""
-        )
-
-        st.subheader("How detection works here")
-        st.markdown(
-            """
-1. Your image is decoded to RGB and downscaled if it exceeds the size guard.
-2. It is passed to the active detector — an Ultralytics YOLO model loaded lazily
-   from configurable weights.
-3. Boxes, labels and confidence scores come straight from the model's output.
-   JUDEtector adds the drawing and the counts; it never adds detections.
-"""
-        )
-
-    with right:
-        st.subheader("Project")
-        st.markdown(
-            """
-**Student:** Senyo-Dzattah Judah Agbemavor
-**Student ID:** PUIT/23110016
-**Programme:** BSc Information Technology
-**Institution:** Pentecost University
-"""
-        )
-        st.subheader("Active model")
-        if model_error:
-            st.error(model_error)
-        elif spec is not None:
-            st.markdown(f"**{spec.display_name}**")
-            st.caption(f"id `{spec.id}` · task `{spec.task}`")
-            if spec.weights_present:
-                st.success("Weights found on disk", icon="✅")
-            else:
-                st.warning("Weights not connected yet", icon="⚠️")
-            st.caption(
-                "Class label(s): "
-                + (", ".join(f"`{label}`" for label in spec.declared_labels) or "unknown")
+    section("Model status", "The detector currently wired into the workspace.")
+    if model_error:
+        note(model_error, tone="warn", icon="alert-circle")
+    elif spec is not None:
+        panel(
+            _kv_markup(
+                [
+                    ("Model", spec.display_name),
+                    ("Classes", ", ".join(spec.declared_labels) or "—"),
+                    ("Weights", "Connected" if spec.weights_present else "Not connected"),
+                    ("Runs this session", str(summary.total_runs)),
+                ]
             )
-
-    if spec is not None:
-        st.divider()
+        )
+        if not connected:
+            note(
+                "Detection is unavailable until weights are connected. Navigation and "
+                "image upload remain active.",
+                icon="info",
+            )
+            render_setup_help(spec)
         render_scope_warning(spec)
+    else:
+        empty_state(
+            icon="cpu",
+            title="No model configured",
+            body="Register a detector in config/models.json to enable detection.",
+        )
 
-    st.divider()
-    st.subheader("Registered models")
-    try:
-        registry = get_registry()
-    except RegistryError as exc:
-        st.error(f"Could not read the model registry: {exc}")
-        return
+    section("Capabilities", "What the workspace does today.")
+    tiles(_CAPABILITIES)
 
-    rows = [
-        {
-            "id": item.id,
-            "name": item.display_name,
-            "kind": item.kind,
-            "general purpose": "yes" if item.is_general_purpose else "no",
-            "weights": "found" if item.weights_present else "missing",
-            "enabled": "yes" if item.enabled else "no",
-        }
-        for item in registry.specs
-    ]
-    st.dataframe(rows, hide_index=True, width="stretch")
-    st.caption(
-        "Adding a model is a configuration change in `config/models.json` — the views "
-        "never reference a specific model id."
-    )
+    section("Recent activity", "Detections run in this browser session.")
+    if not runs:
+        empty_state(
+            icon="activity",
+            title="No detections yet",
+            body="Analysed images will be listed here and summarised in Analytics.",
+        )
+    else:
+        st.dataframe(
+            runs_to_records(runs[-6:]),
+            hide_index=True,
+            width="stretch",
+        )

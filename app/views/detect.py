@@ -1,10 +1,10 @@
-"""Detect page: image upload → detection → annotated image + counts + scores."""
+"""Detect: image upload workspace → detection → annotated result."""
 
 from __future__ import annotations
 
 import streamlit as st
 
-from app.components.model_sidebar import render_settings, select_model
+from app.components.model_sidebar import detection_settings
 from app.components.pipeline import analyse_image
 from app.components.results import (
     render_detection_table,
@@ -23,16 +23,25 @@ from app.core.errors import InvalidImageError
 from app.core.image_io import describe_image, downscale, load_image
 from app.core.runtime import get_detector
 from app.core.stats import DetectionRun, record_run_once
+from app.ui.components import empty_state, meta, note, page_header, section
+from app.ui.theme import inject_theme
 
 __all__ = ["render"]
 
 
 def render() -> None:
-    st.title("Detect")
-    st.caption("Upload an image to run the active detector over it.")
+    inject_theme()
 
-    spec, model_error = select_model()
-    confidence, iou = render_settings()
+    spec, confidence, iou, model_error = detection_settings()
+    connected = bool(spec is not None and spec.weights_present)
+
+    page_header(
+        "Detect",
+        "Upload an image and run the connected model over it. Results include boxes, "
+        "per-detection confidence and a downloadable annotated file.",
+        eyebrow="Workspace",
+        status=("Model connected", "ok") if connected else ("Model not connected", "warn"),
+    )
 
     if model_error:
         st.error(f"Model configuration problem: {model_error}")
@@ -43,17 +52,26 @@ def render() -> None:
     render_model_caption(spec)
     render_scope_warning(spec)
 
+    if not connected:
+        note(
+            "Detection is unavailable until model weights are connected. You can still "
+            "preview an image.",
+            icon="alert-circle",
+            tone="warn",
+        )
+
     uploaded = st.file_uploader(
-        "Choose an image",
+        "Image file",
         type=list(config.SUPPORTED_IMAGE_TYPES),
-        help=f"Max {config.MAX_UPLOAD_MB} MB. JPG, PNG, WEBP or BMP.",
+        help=f"JPG, PNG, WEBP or BMP · max {config.MAX_UPLOAD_MB} MB. Processed in memory.",
     )
 
     if uploaded is None:
-        st.info(
-            "Upload an image to begin. No detection is run and no statistics are "
-            "recorded until you do.",
-            icon="ℹ️",
+        empty_state(
+            icon="image",
+            title="No image selected",
+            body="Drop an image above to run detection. Nothing is analysed or recorded "
+            "until a file is provided.",
         )
         render_labels_line(spec.declared_labels, "declared")
         return
@@ -66,51 +84,37 @@ def render() -> None:
 
     image, was_resized = downscale(image)
     if was_resized:
-        st.info(
+        note(
             f"Large image downscaled to {describe_image(image)} "
-            f"(guard: {config.MAX_IMAGE_DIMENSION} px).",
-            icon="ℹ️",
+            f"(limit {config.MAX_IMAGE_DIMENSION} px).",
+            icon="info",
         )
 
     detector = get_detector(spec)
     outcome = analyse_image(image, spec, detector, confidence=confidence, iou=iou)
 
-    original_column, processed_column = st.columns(2)
-    with original_column:
-        st.subheader("Original image")
-        st.image(image, width="stretch")
-        st.caption(f"`{uploaded.name}` · {describe_image(image)}")
-
-    with processed_column:
-        st.subheader("Processed image")
-        if outcome.ok and outcome.processed is not None:
-            st.image(outcome.processed, width="stretch")
-            st.caption(
-                f"{outcome.count} box(es) drawn · model `{spec.id}` · "
-                f"confidence ≥ {confidence:.2f}"
-            )
-        else:
-            st.info(
-                "No processed image: detection could not run, so there is nothing "
-                "to draw. See the message below.",
-                icon="ℹ️",
-            )
-
     if not outcome.ok:
+        st.error(f"**{outcome.error_title}**\n\n{outcome.error_message}")
         if outcome.unavailable:
-            st.error(f"**{outcome.error_title}**\n\n{outcome.error_message}")
             render_setup_help(spec)
-        else:
-            st.error(f"**{outcome.error_title}**\n\n{outcome.error_message}")
         return
 
     result = outcome.result
     assert result is not None  # guaranteed by outcome.ok
 
-    st.divider()
+    section("Results", f"{uploaded.name} · {describe_image(image)}")
     render_summary_metrics(result, spec)
     render_no_detections_note(result)
-    render_detection_table(result)
+
+    original_column, processed_column = st.columns(2, gap="medium")
+    with original_column:
+        st.image(image, caption="Original", width="stretch")
+    with processed_column:
+        st.image(outcome.processed, caption="Annotated", width="stretch")
+
+    if result.detections:
+        section("Detections", "Sorted by confidence, with pixel coordinates.")
+        render_detection_table(result)
 
     if outcome.processed is not None:
         render_download_button(outcome.processed, uploaded.name)
@@ -140,4 +144,4 @@ def render() -> None:
             result.count,
         ),
     )
-    st.caption("This run has been added to the session statistics on the Dashboard.")
+    meta("Added to this session's activity. Open Analytics for the aggregate view.")

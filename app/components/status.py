@@ -1,8 +1,8 @@
-"""Model status / honesty banners.
+"""Model provenance and limitation messaging.
 
-The point of this module: whenever the app shows detections, the user must also
-be able to see *which* model produced them and whether it is a validated
-general-purpose face detector (it is not, for the current `judah` model).
+Kept intentionally quiet: short inline notes and captions rather than large
+banners, while still stating plainly that the bundled model is subject-specific
+and produces no detections when weights are absent.
 """
 
 from __future__ import annotations
@@ -11,83 +11,70 @@ import streamlit as st
 
 from app.core.detector import Detector
 from app.core.registry import ModelSpec
+from app.ui.components import note
 
 __all__ = [
+    "render_labels_line",
     "render_model_caption",
     "render_scope_warning",
     "render_setup_help",
-    "render_labels_line",
 ]
 
 
 def render_model_caption(spec: ModelSpec, detector: Detector | None = None) -> None:
-    """One-line summary of the active model, used at the top of working pages."""
-    parts = [f"**Model:** {spec.display_name}"]
+    """Single dim line summarising the active detector."""
+    parts = [spec.display_name, f"task {spec.task}"]
     parts.append("weights found" if spec.weights_present else "weights missing")
     if detector is not None and detector.is_ready():
-        parts.append(f"{len(detector.labels)} loaded label(s)")
+        parts.append(f"{len(detector.labels)} label(s) loaded")
     st.caption(" · ".join(parts))
 
 
 def render_scope_warning(spec: ModelSpec) -> None:
-    """Make the subject-specific caveat impossible to miss."""
+    """State the model's real scope; skipped for general-purpose models."""
     if spec.is_general_purpose:
         return
-    labels = ", ".join(spec.declared_labels) if spec.declared_labels else "n/a"
-    st.warning(
-        "**Scope:** this is a **subject-specific detector**, not a validated "
-        f"general-purpose face detector. Its class label(s) are: `{labels}`. "
-        "It was trained on a small single-class dataset by the project author, so "
-        "its detections describe *that* subject only. Do not read its output as "
-        "\u201cany human face detected\u201d.",
-        icon="⚠️",
+    labels = ", ".join(spec.declared_labels) if spec.declared_labels else "none declared"
+    note(
+        "Subject-specific model. Its classes are "
+        f"{labels}; it is not a validated general-purpose face detector, so "
+        "detections describe that subject only.",
+        tone="warn",
+        icon="alert-triangle",
     )
 
 
 def render_labels_line(labels: tuple[str, ...], source: str) -> None:
-    """Show labels exactly as they will appear on boxes, with their provenance."""
+    """Show the class labels that will appear on boxes, with provenance."""
     if not labels:
-        st.caption("Class labels: unknown (model not loaded and none declared).")
+        st.caption("Class labels: unknown — no model loaded and none declared.")
         return
     rendered = ", ".join(f"`{label}`" for label in labels)
     if source == "model":
-        st.caption(f"Class labels (from the loaded model file): {rendered}")
+        st.caption(f"Class labels, read from the model file: {rendered}")
     else:
-        st.caption(
-            f"Class labels (declared in config, not yet verified against the model file): "
-            f"{rendered}"
-        )
+        st.caption(f"Class labels declared in configuration (unverified): {rendered}")
 
 
 def render_setup_help(spec: ModelSpec) -> None:
-    """Actionable instructions for supplying weights."""
-    with st.expander("How to connect your trained model", expanded=True):
+    """Concise, collapsible instructions for connecting weights."""
+    with st.expander("Connect a model", expanded=False):
         st.markdown(
             f"""
-JUDEtector does not ship model weights. To enable detection:
+Place trained Ultralytics weights at `{spec.weights_path}`,
+or point the app at an existing file:
 
-1. Export/download your trained Ultralytics weights (`best.pt`).
-2. Place the file at:
+```bash
+export JUDETECTOR_MODEL_PATH=/absolute/path/to/best.pt
+```
 
-   ```
-   {spec.weights_path}
-   ```
+Then install the optional runtime and reload:
 
-   …or point the app at it without moving the file:
+```bash
+pip install -r requirements-model.txt
+```
 
-   ```bash
-   export JUDETECTOR_MODEL_PATH=/absolute/path/to/best.pt
-   ```
-
-3. Install the optional ML stack (needed to load PyTorch weights):
-
-   ```bash
-   pip install -r requirements-model.txt
-   ```
-
-4. Restart the app. The sidebar status will change from *weights missing* to
-   *weights found*, and the model's real class labels will be read from the file.
-
-Weights are intentionally **git-ignored** — never commit them.
+Weights are git-ignored and never shipped with the application. Full details are
+in `docs/MODEL_INTEGRATION.md`.
 """
         )
