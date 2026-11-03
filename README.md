@@ -94,11 +94,13 @@ Full procedure and troubleshooting: [`docs/MODEL_INTEGRATION.md`](docs/MODEL_INT
 
 ## Application sections
 
-The application opens directly on **Detect**: the whole product is one workflow.
+The application opens on **Home**, a short landing page that leads straight into the
+workflow.
 
 | Page | Purpose |
 |---|---|
-| **Detect** (default) | Upload an image → *Analyse image* → count, mean confidence, original and annotated images, annotated-image download. Confidence/overlap thresholds sit in a collapsed **Advanced settings** panel. |
+| **Home** (default) | Hero with two calls to action (*Start detecting*, *Try camera*), an illustrative original → annotated preview, three steps, and a privacy footer |
+| **Detect** | Upload an image → *Analyse image* → count, mean confidence, original and annotated images, annotated-image download. Confidence/overlap thresholds sit in a collapsed **Advanced settings** panel. |
 | **Camera** | Browser snapshot → the same pipeline, one still frame per capture (no live video) |
 | **Help** | How it works, what the numbers mean, privacy, honest limitations |
 | **Developer** (`/developer`, hidden) | Model resolution, weights paths, runtime availability, setup commands, dataset composition, recorded evaluation metrics, session activity |
@@ -109,15 +111,24 @@ The interface is a small design system rather than per-page styling:
 
 - `app/ui/theme.py` — design tokens and one shared stylesheet (off-white canvas,
   charcoal type, restrained teal accent, consistent radii and hover/active states).
-- `app/ui/icons.py` — inline SVG icons (Lucide), used for all in-page iconography.
-- `app/ui/components.py` — reusable primitives: page header, sections, status
-  pills, notes, empty states, tiles, key/value strips.
-- `app/ui/nav.py` — the five navigation entries, using Streamlit's own
-  `st.navigation` with Material SVG icons (no emoji in navigation).
+- `app/ui/icons.py` — one inline SVG family (Lucide geometry): 24px grid, 2px
+  stroke, round caps and joins, three context sizes (16 / 20 / 24), colour
+  inherited from the tokens. No emoji and no second icon style in page content.
+- `app/ui/components.py` — reusable primitives: hero, page header, sections, status
+  pills, notes, empty states, steps, key/value strips, footer.
+- `app/ui/nav.py` — the four consumer destinations via Streamlit's own
+  `st.navigation`.
+
+Streamlit's `st.Page(icon=...)` accepts only an emoji or `:material/name:`, so the
+navigation uses the closest Material Symbols Rounded glyph. Everything inside the
+pages is Lucide. Replacing the native navigation with hand-written links would cost
+URL routing, keyboard support and the mobile drawer, which is not a trade worth
+making for icon appearance. `tests/test_ui_icons.py` keeps Material confined to
+`nav.py` and enforces the icon rules.
 
 The interface is split by audience. End users only ever see the workflow: no weights
 paths, dependency names, registry vocabulary, dataset statistics or evaluation
-configuration appear on Detect, Camera or Help. Those live on the developer page.
+configuration appear on Home, Detect, Camera or Help. Those live on the developer page.
 
 That page is **hidden from the navigation, not protected by it** — Streamlit's
 `visibility="hidden"` hides a route; it does not authorise one. Open
@@ -135,7 +146,7 @@ temporarily unavailable") while the technical cause is kept for the developer pa
 judetector/
 ├── app/
 │   ├── main.py                  # entry point + navigation
-│   ├── views/                   # Detect, Camera, Help, Developer
+│   ├── views/                   # Home, Detect, Camera, Help, Developer
 │   ├── components/              # shared UI: pipeline, workflow, results, settings
 │   ├── ui/                      # design system: theme, icons, components, navigation
 │   └── core/                    # Streamlit-free logic
@@ -152,7 +163,7 @@ judetector/
 ├── config/models.json           # model registry (the swap point)
 ├── metrics/                     # evaluation records (none yet — by design)
 ├── models/                      # weights go here (git-ignored)
-├── tests/                       # 178 automated tests
+├── tests/                       # 232 automated tests
 └── docs/                        # proposal, integration guide, testing
 ```
 

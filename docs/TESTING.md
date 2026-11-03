@@ -66,9 +66,16 @@ in about two seconds.
   by face count, and count empty runs separately.
 
 ### Interface — `tests/test_app_smoke.py`
-- The entry point opens Detect; every page renders without exception.
-- Navigation is exactly Detect, Camera, Help, with SVG (non-emoji) icons; the
-  developer page is hidden from that list and routable at `/developer`.
+- The entry point opens Home; every page renders without exception.
+- Navigation is exactly Home, Detect, Camera, Help, with SVG (non-emoji) icons and
+  Home as the single default route; the developer page is hidden from that list and
+  routable at `/developer`.
+- The landing page shows the specified hero copy, both calls to action, a preview
+  labelled "Illustrative preview — not model output" (asserted to contain no
+  percentages or confidence figures), three ordered steps and a footer with the
+  wordmark, privacy line and a Help link.
+- Clicking *Start detecting* lands on a page with a file uploader; clicking *Try
+  camera* lands on a page with a camera input.
 - Detect exposes an uploader; thresholds live in one collapsed *Advanced settings*
   panel; nothing is analysed until *Analyse image* is pressed.
 - **End-to-end:** an uploaded image with a fake model produces `Detections = 2`,
@@ -84,6 +91,14 @@ in about two seconds.
 - Help carries the three-step workflow, the privacy statement and the
   detection-is-not-recognition limitation.
 
+### Icons — `tests/test_ui_icons.py`
+- Every glyph is on the 24px grid, has a single 2px stroke, round caps/joins,
+  `currentColor` and `aria-hidden`.
+- Sizes are restricted to the 16 / 20 / 24 scale, both in the module and at every
+  call site.
+- Material glyphs may only appear in `nav.py`; the rest of the app is Lucide.
+- No emoji anywhere in the application source.
+
 ### Styles — `tests/test_ui_styles.py`
 - Every text/background token pair meets WCAG AA (4.5:1); the uploader border meets
   the 3:1 non-text threshold.
@@ -93,6 +108,8 @@ in about two seconds.
   bundle, so a Streamlit upgrade that renames a hook fails the suite instead of
   silently dropping styles.
 - `.streamlit/config.toml` colours must match the design tokens.
+- The landing illustration is drawn from palette tokens and its outline clears the
+  3:1 non-text threshold.
 
 ### Repository hygiene — `tests/test_repo_hygiene.py`
 - `.gitignore` covers `*.pt`, `*.onnx`, `datasets/`, `runs/`, secrets.
@@ -103,7 +120,7 @@ in about two seconds.
 ## Current result
 
 ```
-178 passed
+232 passed
 ```
 
 Test counts by module are reported in the pull request. UI tests are marked `ui` and

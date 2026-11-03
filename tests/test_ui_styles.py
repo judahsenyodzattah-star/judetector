@@ -66,6 +66,21 @@ def test_text_pairs_meet_wcag_aa(name, fg, bg):
     assert ratio >= 4.5, f"{name} is {ratio:.2f}:1 (needs 4.5:1)"
 
 
+def test_illustration_outline_meets_non_text_contrast():
+    """The preview's detection outline must stay readable on the artwork."""
+    ratio = contrast(PALETTE["accent"], PALETTE["art_canvas"])
+    assert ratio >= 3.0, f"illustration outline is {ratio:.2f}:1 (needs 3:1)"
+
+
+def test_landing_page_tokens_exist_and_are_sourced_from_the_palette():
+    """The preview artwork is drawn from tokens, not ad-hoc hex values."""
+    assert "var(--jd-art-canvas)" in _CSS
+    assert {"art_canvas", "art_shape"} <= PALETTE.keys()
+    home = (PROJECT_ROOT / "app" / "views" / "home.py").read_text(encoding="utf-8")
+    assert "PALETTE[" in home
+    assert "#F1EDE4" not in home and "#D7CDBC" not in home
+
+
 def test_uploader_border_meets_non_text_contrast():
     """The dropzone border is the only affordance of a large empty region."""
     ratio = contrast(PALETTE["control_border"], PALETTE["surface"])
@@ -122,6 +137,34 @@ def test_uploader_browse_button_is_teal_on_white():
 # --------------------------------------------------------------------------
 # Responsive + focus
 # --------------------------------------------------------------------------
+def test_paragraph_classes_outrank_the_global_text_rule():
+    """`.stApp p` sets the body size, so class rules on <p>/<h1> must be scoped.
+
+    Without this, the intended type scale silently collapses to body size — the
+    kind of cascade bug that never shows up in a markup assertion.
+    """
+    sources = [PROJECT_ROOT / "app" / "ui" / "components.py"] + sorted(
+        (PROJECT_ROOT / "app" / "views").glob("*.py")
+    )
+    paragraph_classes = set()
+    for path in sources:
+        text = path.read_text(encoding="utf-8")
+        paragraph_classes.update(re.findall(r'<(?:p|h1)\s+class="(jd-[a-z-]+)"', text))
+
+    assert paragraph_classes, "no paragraph-level design-system classes found"
+    for class_name in sorted(paragraph_classes):
+        for block in re.finditer(r"([^{}]+)\{([^}]*)\}", _CSS_RULES):
+            selectors = [part.strip() for part in block.group(1).split(",")]
+            if "font-size" not in block.group(2):
+                continue
+            if not any(f".{class_name}" in selector for selector in selectors):
+                continue
+            assert any(
+                f".{class_name}" in selector and selector.startswith(".stApp")
+                for selector in selectors
+            ), f".{class_name} sets font-size but is outranked by `.stApp p`"
+
+
 def test_stylesheet_has_mobile_breakpoints():
     breakpoints = re.findall(r"@media \(max-width: (\d+)px\)", _CSS)
     assert "900" in breakpoints and "760" in breakpoints
