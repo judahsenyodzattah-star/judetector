@@ -26,18 +26,12 @@ __all__ = ["render"]
 def render() -> None:
     inject_theme()
 
-    page_header(
-        "Detect",
-        "Upload a photo and JUDEtector marks what it finds, with a confidence "
-        "score for each match.",
-        eyebrow="",
-    )
+    page_header("Detect", "Upload an image to analyse it.")
 
     spec, model_error = current_model()
-    confidence, iou = advanced_settings()
 
     uploaded = st.file_uploader(
-        "Upload an image",
+        "Image file",
         type=list(config.SUPPORTED_IMAGE_TYPES),
         help=None,
     )
@@ -49,7 +43,7 @@ def render() -> None:
     data = uploaded.getvalue()
     image = decode_image(data)
     if image is None:
-        note(UNREADABLE_MESSAGE, tone="warn", icon="alert-circle")
+        note(UNREADABLE_MESSAGE, tone="warn")
         return
 
     st.image(image, width=380)
@@ -57,9 +51,10 @@ def render() -> None:
 
     if spec is None or model_error:
         # A registry/config problem is a developer concern: the user gets one line.
-        note(UNAVAILABLE_MESSAGE, tone="warn", icon="alert-circle")
+        note(UNAVAILABLE_MESSAGE, tone="warn")
         return
 
+    confidence, iou = advanced_settings()
     analysis_workspace(
         namespace="detect_analysis",
         source="upload",

@@ -74,7 +74,7 @@ def analysis_workspace(
     if image is None:
         image = decode_image(data)
     if image is None:
-        note(UNREADABLE_MESSAGE, tone="warn", icon="alert-circle")
+        note(UNREADABLE_MESSAGE, tone="warn")
         return
 
     signature = (filename, len(data), round(confidence, 2), round(iou, 2))
@@ -103,7 +103,7 @@ def analysis_workspace(
 def render_outcome(outcome: AnalysisOutcome, image: Image.Image, filename: str) -> None:
     """Show either the plain unavailable message or the real result."""
     if not outcome.ok:
-        note(UNAVAILABLE_MESSAGE, tone="warn", icon="alert-circle")
+        note(UNAVAILABLE_MESSAGE, tone="warn")
         meta("Your image was not modified or stored.")
         return
 

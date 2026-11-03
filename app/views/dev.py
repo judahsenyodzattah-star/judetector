@@ -36,7 +36,6 @@ from app.ui.components import (
     note,
     page_header,
     section,
-    status_pill,
 )
 from app.ui.theme import inject_theme
 
@@ -58,8 +57,6 @@ def render() -> None:
     page_header(
         "Developer",
         "Diagnostics, model controls and recorded evaluation data. Not shown to end users.",
-        eyebrow="",
-        status=("Not access-controlled", "warn"),
     )
 
     note(
@@ -67,7 +64,6 @@ def render() -> None:
         "URL can open it, so keep it off public deployments or restrict it at the hosting "
         "layer.",
         tone="warn",
-        icon="lock",
     )
 
     spec, error = select_model()
@@ -77,7 +73,6 @@ def render() -> None:
         return
     if spec is None:
         empty_state(
-            icon="cpu",
             title="No model registered",
             body="Add an entry to config/models.json to enable detection.",
         )
@@ -114,13 +109,11 @@ def _render_model(spec: ModelSpec) -> None:
     meta(f"Labels source: {info['labels_source']}")
     meta(f"Class labels: {', '.join(info['labels']) if info['labels'] else 'unknown'}")
 
-    if info["weights_present"]:
-        st.markdown(status_pill("Detector ready", "ok"), unsafe_allow_html=True)
-    else:
-        st.markdown(
-            status_pill("End users see: image analysis unavailable", "warn"),
-            unsafe_allow_html=True,
-        )
+    meta(
+        "Detector ready."
+        if info["weights_present"]
+        else "Detector unavailable. End users see the temporary-unavailable message."
+    )
 
     reload_model_button()
 
@@ -172,7 +165,6 @@ def _render_evaluation(spec: ModelSpec) -> None:
 
     if report is None:
         empty_state(
-            icon="chart",
             title="No evaluation metrics recorded",
             body="Nothing is displayed rather than estimating performance.",
         )
@@ -265,7 +257,6 @@ def _render_dataset(spec: ModelSpec) -> None:
                 f"annotated, so up to {split_total - annotated} split images may have no "
                 "label file. Verify before treating metrics as authoritative.",
                 tone="warn",
-                icon="alert-triangle",
             )
 
     if spec.provenance:
@@ -282,7 +273,6 @@ def _render_session_activity() -> None:
     runs = get_runs(st.session_state)
     if not runs:
         empty_state(
-            icon="activity",
             title="No runs in this session",
             body="Run an analysis on Detect or Camera to populate this table.",
         )

@@ -10,10 +10,11 @@ implemented at the hosting layer, and nothing here should imply otherwise.
 
 **Why Material icons in the navigation?** `st.Page(icon=...)` accepts only an
 emoji, ``:material/name:`` or ``"spinner"`` — arbitrary inline SVG is not
-supported. Replacing the native navigation with hand-written links would cost URL
-routing, keyboard support and the mobile drawer, so the navigation uses the closest
-Material Symbols Rounded glyph and every icon *inside* the pages comes from the
-Lucide set in `app.ui.icons`. Both are 24px grids with rounded terminals.
+supported. The four destinations are the only place an icon is genuinely needed
+(they stand in for the wordmark on the mobile drawer), so the navigation uses one
+coherent Material Symbols Rounded glyph per destination and nothing inside the
+pages uses icons at all. Replacing the native navigation with hand-written links
+would cost URL routing, keyboard support and the mobile drawer.
 
 Destinations are declared as plain data (:class:`NavEntry`) and turned into
 `st.Page` objects per script run, so tests can assert the information architecture

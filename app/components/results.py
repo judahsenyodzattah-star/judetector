@@ -41,8 +41,7 @@ def render_no_detections_note(result: DetectionResult) -> None:
         return
     note(
         "Nothing matched at this confidence level. Lower the confidence threshold in "
-        "Advanced settings to include weaker matches, or try a clearer photo.",
-        icon="info",
+        "Advanced settings to include weaker matches, or try a clearer photo."
     )
 
 
