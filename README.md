@@ -92,6 +92,35 @@ Full procedure and troubleshooting: [`docs/MODEL_INTEGRATION.md`](docs/MODEL_INT
 
 ---
 
+## Inference API (Stage 0)
+
+A FastAPI service wraps the same detection engine so a web client — and later a
+mobile client — can run identical detection:
+
+```bash
+pip install -r requirements-dev.txt
+uvicorn api.main:app --reload --port 8000
+curl -s localhost:8000/v1/health
+```
+
+- `GET /v1/health` — liveness plus honest model state (`ok` only when weights
+  exist; `degraded` otherwise).
+- `GET /v1/model` — the public model card: kind, labels and their source,
+  limitations, and recorded metrics verbatim or `null`.
+- `POST /v1/detect` — **Stage 1**, with upload validation, rate limiting and the
+  same explicit-analysis rule as the prototype.
+
+The API imports `app/core` and `app/components/pipeline.py` unchanged; it never
+re-implements detection and never fabricates output. Container:
+
+```bash
+docker build -t judetector-api .
+docker run -p 8080:8080 -v /path/to/models:/models:ro \
+  -e JUDETECTOR_MODEL_PATH=/models/best.pt judetector-api
+```
+
+Full contract and error taxonomy: [`docs/API.md`](docs/API.md).
+
 ## Application sections
 
 The application opens on **Home**, an entry point built around one real control:

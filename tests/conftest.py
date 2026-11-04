@@ -129,3 +129,53 @@ def registry_payload() -> dict:
             },
         ],
     }
+
+
+# --------------------------------------------------------------------------
+# API fixtures
+# --------------------------------------------------------------------------
+@pytest.fixture
+def api_registry(tmp_path):
+    """Write a temporary model registry and return its path.
+
+    Weights are never created in the repository (hygiene tests forbid it); when
+    `weights=True` a zero-byte stub file is written inside `tmp_path`, which is
+    enough for every availability check because nothing loads it.
+    """
+    import json
+
+    def _make(
+        *,
+        weights: bool = False,
+        metrics: dict | None = None,
+        kind: str = "subject_specific",
+        labels: tuple[str, ...] = ("judah",),
+        enabled: bool = True,
+    ):
+        model_id = "stub-model"
+        weights_path = tmp_path / "weights" / "best.pt"
+        weights_path.parent.mkdir(parents=True, exist_ok=True)
+        if weights:
+            weights_path.write_bytes(b"stub")
+        entry: dict = {
+            "id": model_id,
+            "display_name": "Stub model",
+            "weights": str(weights_path),
+            "kind": kind,
+            "is_general_purpose": kind == "general_purpose",
+            "declared_labels": list(labels),
+            "task": "detect",
+            "enabled": enabled,
+        }
+        if metrics is not None:
+            metrics_path = tmp_path / "metrics.json"
+            metrics_path.write_text(json.dumps(metrics), encoding="utf-8")
+            entry["metrics_file"] = str(metrics_path)
+        registry_path = tmp_path / "models.json"
+        registry_path.write_text(
+            json.dumps({"default_model_id": model_id, "models": [entry]}),
+            encoding="utf-8",
+        )
+        return registry_path
+
+    return _make

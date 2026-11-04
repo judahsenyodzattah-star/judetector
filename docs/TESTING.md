@@ -152,6 +152,17 @@ in about two seconds.
 - Every `icon=` in the pages must be a well-formed `:material/…:` symbol, so a second icon
   family cannot creep in.
 
+### API contract — `tests/test_api_*.py`
+- `/v1/health` reports `degraded` with no weights and `ok` with them, and never
+  loads weights to answer.
+- `/v1/model` states the model's limitations, reports `labels_source` honestly,
+  returns recorded metrics verbatim and withholds invalid ones.
+- Problem documents are asserted for 404, 405, 422, 500 and 503: stable `type`,
+  `request_id`, no paths, no internals, no stack traces.
+- Every response is `no-store` with a request id; `/docs` is never available in
+  production; CORS is closed unless origins are allowlisted.
+- The API process is asserted (in a subprocess) to import no Streamlit.
+
 ### Repository hygiene — `tests/test_repo_hygiene.py`
 - `.gitignore` covers `*.pt`, `*.onnx`, `datasets/`, `runs/`, secrets.
 - No weights files and no dataset directories exist in the working tree.
@@ -161,7 +172,7 @@ in about two seconds.
 ## Current result
 
 ```
-212 passed
+239 passed
 ```
 
 Test counts by module are reported in the pull request. UI tests are marked `ui` and
