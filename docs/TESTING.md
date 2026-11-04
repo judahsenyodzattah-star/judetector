@@ -143,6 +143,14 @@ in about two seconds.
   runs nothing; changing a threshold never calls the model; *Analyse image* is the only
   path to inference; results render as measured tiles, one row per detection, with
   timings taken from `DetectionResult.inference_ms` and a measured total.
+- Home is asserted to have exactly one bordered surface in source, no illustration, no
+  image before an analysis exists, and no fixed pixel widths; its columns stack in source
+  order so the uploader precedes session information on narrow screens.
+- The last-result preview is asserted to show only real data (filename, count, measured
+  total, annotated output) and to restore the image bytes and the thresholds that
+  produced it when reopened.
+- Every `icon=` in the pages must be a well-formed `:material/…:` symbol, so a second icon
+  family cannot creep in.
 
 ### Repository hygiene — `tests/test_repo_hygiene.py`
 - `.gitignore` covers `*.pt`, `*.onnx`, `datasets/`, `runs/`, secrets.
@@ -153,7 +161,7 @@ in about two seconds.
 ## Current result
 
 ```
-207 passed
+212 passed
 ```
 
 Test counts by module are reported in the pull request. UI tests are marked `ui` and

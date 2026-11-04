@@ -100,7 +100,7 @@ starts from the explicit *Analyse image* action.
 
 | Page | Purpose |
 |---|---|
-| **Home** (default) | The upload control (selecting a file opens Detect with it ready, without analysing it), a camera link, this session's real counts once they exist, a compact three-step account of the flow, and one small captioned specimen plate |
+| **Home** (default) | One dominant surface: the native uploader, whose own control is the page's primary action (selecting a file opens Detect with it ready, without analysing it), with the camera link directly beneath it. Beside it, an unboxed session panel: real counts plus the annotated output of your latest analysis, which reopens that exact result on Detect. Below both, the workflow as one understated line |
 | **Detect** | Image on the left (upload, preview, file facts, *Analyse image*), results on the right (*Results* / *Details* / *JSON*), thresholds behind one **Params** popover |
 | **Camera** | Browser snapshot → the same pipeline and the same two-panel workspace, one still frame per capture (no live video) |
 | **Help** | How it works, what the numbers mean, privacy, honest limitations |
@@ -113,14 +113,17 @@ around a light analysis workspace, with work happening in bordered cards.
 
 - `app/ui/theme.py` — design tokens and one stylesheet. Canvas `#F4F2ED`, cards
   `#FFFFFF`, rail `#1E2122`, ink `#16181A`, secondary ink `#52585C`, rules `#D0CBC1`,
-  and one marking colour, ochre `#8A5A00`, which may fill the primary action, draw the
-  2px active rule in the rail, draw a focus ring or outline a detection — never a
-  panel, badge or tinted section. Radii are two steps (8px cards, 6px controls),
-  spacing is a 4px scale, and effects are limited to focus rings.
-- `app/ui/components.py` — the primitives: page header, card and card header, fact
-  strip, detection list, empty state, note, steps, bullets, readout and the specimen
-  plate. Monospace is reserved for data (counts, confidences, timings, thresholds,
-  coordinates); prose is never set in it.
+  and one marking colour, ochre `#8A5A00`, which may fill a primary action, draw the
+  active rule in the rail, draw a focus ring or outline a detection — never a panel,
+  badge or tinted section. Radii are two steps (8px cards, 6px controls), spacing is a
+  4px scale, type is seven steps from 12px captions to the 24px page title, and effects
+  are limited to focus rings. Rail destinations are set in `#CBD0CC` (≈10:1) with a 3px
+  ochre rule and a 10% white wash on the active item.
+- `app/ui/components.py` — the primitives: page header, card and card header, unboxed
+  panel, fact strip, detection list, empty state, note, steps, flow line, bullets and
+  readout. Home uses exactly one bordered surface; supporting content is separated by
+  rules and space instead of more cards. Monospace is reserved for data (counts,
+  confidences, timings, thresholds, coordinates); prose is never set in it.
 - `.streamlit/config.toml` — the same tokens where Streamlit can apply them itself
   (colours, radii, 14px base size, the graphite sidebar), so native cards, buttons,
   tabs and inputs inherit the language instead of being repainted.

@@ -26,9 +26,11 @@ __all__ = [
     "detection_list",
     "empty_state",
     "fact_strip",
+    "flow_line",
     "meta",
     "note",
     "page_header",
+    "panel",
     "rail_status",
     "readout",
     "section",
@@ -60,11 +62,23 @@ def card(*, title: str | None = None, note: str | None = None) -> Iterator[None]
     """A bordered card, optionally with a header line inside it.
 
     The border, radius and background come from `.streamlit/config.toml`, so the card
-    looks the same as every native container in the app.
+    looks the same as every native container in the app. A medium gap keeps the interior
+    from crowding the border.
     """
-    with st.container(border=True):
+    with st.container(border=True, gap="medium"):
         if title or note:
             card_head(title or "", note=note)
+        yield
+
+
+@contextmanager
+def panel(title: str, note: str | None = None) -> Iterator[None]:
+    """An unboxed block opened by a rule: secondary content without another card."""
+    head = f'<p class="jd-panel__title">{escape(title)}</p>'
+    if note:
+        head += f'<p class="jd-panel__note">{escape(note)}</p>'
+    _html(f'<div class="jd-panel__head">{head}</div>')
+    with st.container():
         yield
 
 
@@ -82,14 +96,17 @@ def card_head(title: str, note: str | None = None) -> None:
     )
 
 
-def rail_status(label: str, *, state: str = "ready", detail: str | None = None) -> None:
-    """Model state at the foot of the rail. Only ever reflects real resolution."""
+def rail_status(label: str, *, state: str = "ready") -> None:
+    """One status light at the foot of the rail.
+
+    `label` is two or three words of application state; model names, paths and
+    diagnostics belong on the developer page.
+    """
     modifier = "jd-rail-status--ready" if state == "ready" else "jd-rail-status--unavailable"
-    detail_html = f" · {escape(detail)}" if detail else ""
     _html(
         f'<div class="jd-rail-status {modifier}">'
         '<span class="jd-rail-status__dot"></span>'
-        f"<span><b>{escape(label)}</b>{detail_html}</span>"
+        f"<span>{escape(label)}</span>"
         "</div>"
     )
 
@@ -187,6 +204,21 @@ def steps(items: Sequence[tuple[str, str]]) -> None:
         for index, (title, body) in enumerate(items, start=1)
     )
     _html(f'<div class="jd-steps">{rendered}</div>')
+
+
+def flow_line(items: Sequence[str]) -> None:
+    """The workflow as one understated line; wraps instead of forming columns."""
+    rendered = ""
+    for index, item in enumerate(items, start=1):
+        if index > 1:
+            rendered += '<span class="jd-flow__sep" aria-hidden="true">·</span>'
+        rendered += (
+            '<span class="jd-flow__item">'
+            f'<span class="jd-flow__n">{index}</span>'
+            f'<span class="jd-flow__label">{escape(item)}</span>'
+            "</span>"
+        )
+    _html(f'<p class="jd-flow">{rendered}</p>')
 
 
 def bullets(items: Sequence[str]) -> None:

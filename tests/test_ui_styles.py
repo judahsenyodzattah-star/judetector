@@ -154,14 +154,21 @@ def test_uploader_surface_is_white_in_css_too():
 def test_every_nested_uploader_text_colour_clears_aa_on_white():
     """Label, instructions and button text are each checked against the surface."""
     checks = {
-        '[data-testid="stFileUploaderDropzone"] p': PALETTE["ink"],
-        '[data-testid="stFileUploaderDropzoneInstructions"] span': PALETTE["ink_secondary"],
-        '[data-testid="stFileUploader"] button': PALETTE["mark"],
+        '[data-testid="stFileUploaderDropzone"] p': (PALETTE["ink"], PALETTE["mount"]),
+        '[data-testid="stFileUploaderDropzoneInstructions"] span': (
+            PALETTE["ink"],
+            PALETTE["mount"],
+        ),
+        '[data-testid="stFileUploaderDropzoneInstructions"] small': (
+            PALETTE["ink_secondary"],
+            PALETTE["mount"],
+        ),
+        '[data-testid="stFileUploader"] button': ("#FFFFFF", PALETTE["mark"]),
     }
-    for selector, colour in checks.items():
+    for selector, (colour, background) in checks.items():
         body = _rule(selector)
         assert "color" in body, f"{selector} sets no colour"
-        assert contrast(colour, PALETTE["mount"]) >= 4.5, f"{selector} falls below AA"
+        assert contrast(colour, background) >= 4.5, f"{selector} falls below AA"
 
 
 def test_uploader_defines_hover_focus_and_disabled_states():
@@ -175,22 +182,31 @@ def test_uploader_defines_hover_focus_and_disabled_states():
         assert _rule(selector)
 
 
-def test_uploader_browse_button_stays_a_white_outlined_control():
+def test_uploader_browse_button_is_the_primary_action():
+    """The uploader's own control is the page's filled primary action.
+
+    Ochre is allowed to fill it because it is the single primary action on Home; the
+    dropzone surface itself stays white.
+    """
     body = _rule('[data-testid="stFileUploader"] button')
-    assert "var(--jd-mount)" in body
-    assert "var(--jd-mark)" in body
-    assert "border: 1px solid var(--jd-mark)" in body
-    # Hover keeps a neutral fill: the marking colour is never a panel.
+    assert "background: var(--jd-mark) !important" in body
+    assert "color: #FFFFFF !important" in body
+    assert "border: 1px solid var(--jd-mark) !important" in body
     hover = _rule('[data-testid="stFileUploader"] button:hover')
-    assert "var(--jd-sheet)" in hover
+    assert "var(--jd-mark-hover)" in hover
+    assert contrast("#FFFFFF", PALETTE["mark"]) >= 4.5
 
 
 # --------------------------------------------------------------------------
 # The marking colour is a marking colour
 # --------------------------------------------------------------------------
 MARK_SURFACE_ALLOWLIST = {
+    # The two primary actions in the product: Analyse image / Open this result, and the
+    # uploader's own browse control, which is the primary action on Home.
     '[data-testid="stBaseButton-primary"]',
     '[data-testid="stBaseButton-primary"]:hover',
+    '[data-testid="stFileUploader"] button',
+    '[data-testid="stFileUploader"] button:hover',
 }
 
 
@@ -233,8 +249,9 @@ def test_the_interface_accent_is_not_one_of_the_models_box_colours():
 # --------------------------------------------------------------------------
 # Type, spacing, radii
 # --------------------------------------------------------------------------
-# Seven text steps: label, data, small, body, card title, section, page title.
-TYPE_SCALE = {0.72, 0.78, 0.84, 0.88, 0.94, 1.06, 1.375}
+# Seven text steps: micro label, caption, small, body/card title, section,
+# metric value, page title.
+TYPE_SCALE = {0.75, 0.8125, 0.875, 0.9375, 1.0625, 1.25, 1.5}
 
 
 def test_type_scale_is_a_fixed_set_of_steps():
@@ -279,15 +296,19 @@ def test_paragraph_classes_outrank_the_global_text_rule():
 
     assert paragraph_classes, "no paragraph-level design-system classes found"
     for class_name in sorted(paragraph_classes):
+        # Match the class itself, not a longer class that starts with it
+        # (`.jd-flow` must not match `.jd-flow__n`).
+        pattern = re.compile(rf"\.{re.escape(class_name)}(?![-\w])")
         for block in re.finditer(r"([^{}]+)\{([^}]*)\}", _CSS_RULES):
             selectors = [part.strip() for part in block.group(1).split(",")]
             if "font-size" not in block.group(2):
                 continue
-            if not any(f".{class_name}" in selector for selector in selectors):
+            matching = [selector for selector in selectors if pattern.search(selector)]
+            if not matching:
                 continue
             assert any(
-                f".{class_name}" in selector and selector.startswith(".stApp")
-                for selector in selectors
+                pattern.search(selector) and selector.startswith(".stApp")
+                for selector in matching
             ), f".{class_name} sets font-size but is outranked by `.stApp p`"
 
 

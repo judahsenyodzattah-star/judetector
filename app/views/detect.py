@@ -107,7 +107,8 @@ def render() -> None:
                 source = staged_image
 
             if source is None:
-                meta(f"JPG, PNG, WEBP or BMP · up to {config.MAX_UPLOAD_MB} MB")
+                # The uploader states the accepted formats and size limit natively;
+                # repeating them here would be a second instruction line.
                 st.page_link(
                     _page("camera"),
                     label="Use the camera instead",
@@ -134,7 +135,7 @@ def render() -> None:
                             source="upload",
                             image=image,
                             filename=filename,
-                            data_length=len(data),
+                            data=data,
                             spec=spec,
                             confidence=confidence,
                             iou=iou,

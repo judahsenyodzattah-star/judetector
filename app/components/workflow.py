@@ -43,8 +43,10 @@ __all__ = [
     "clear_pending",
     "decode_image",
     "image_facts",
+    "latest_result",
     "pending_image",
     "remember_pending",
+    "stage_existing_result",
     "stored_analysis",
 ]
 
@@ -117,7 +119,7 @@ def analyse_now(
     source: str,
     image: Image.Image,
     filename: str,
-    data_length: int,
+    data: bytes,
     spec: ModelSpec,
     confidence: float,
     iou: float,
@@ -138,10 +140,11 @@ def analyse_now(
         _remember_error(outcome, source)
 
     record = {
-        "signature": signature_for(filename, data_length, confidence, iou),
+        "signature": signature_for(filename, len(data), confidence, iou),
         "outcome": outcome,
         "image": image,
         "filename": filename,
+        "data": data,
         "total_ms": total_ms,
     }
     st.session_state[namespace] = record
@@ -154,7 +157,7 @@ def analyse_controls(
     source: str,
     image: Image.Image,
     filename: str,
-    data_length: int,
+    data: bytes,
     spec: ModelSpec,
     confidence: float,
     iou: float,
@@ -166,14 +169,14 @@ def analyse_controls(
     record exists for the same image but different thresholds, the interface says so
     instead of showing numbers the current controls did not produce.
     """
-    signature = signature_for(filename, data_length, confidence, iou)
+    signature = signature_for(filename, len(data), confidence, iou)
     if st.button(button_label, type="primary", icon=":material/play_arrow:", width="stretch"):
         return analyse_now(
             namespace=namespace,
             source=source,
             image=image,
             filename=filename,
-            data_length=data_length,
+            data=data,
             spec=spec,
             confidence=confidence,
             iou=iou,
@@ -185,6 +188,45 @@ def analyse_controls(
         if isinstance(previous, dict) and previous.get("filename") == filename:
             meta("Thresholds changed — analyse again to apply them.")
     return stored
+
+
+def latest_result(namespace: str) -> dict[str, Any] | None:
+    """The most recent successful analysis in this session, if one exists."""
+    record = st.session_state.get(namespace)
+    if not isinstance(record, dict):
+        return None
+    outcome = record.get("outcome")
+    if outcome is None or not outcome.ok or outcome.result is None:
+        return None
+    return record
+
+
+def stage_existing_result(namespace: str) -> bool:
+    """Reopen the latest analysis on Detect, exactly as it was produced.
+
+    Restores the image bytes and the thresholds that produced the result, so Detect
+    recomputes the same signature and shows the stored outcome rather than an empty
+    panel. Nothing is re-run and nothing is invented; if the original bytes are no
+    longer available the result is dropped instead of being shown beside an image it
+    did not come from.
+    """
+    record = latest_result(namespace)
+    if record is None:
+        return False
+    result = record["outcome"].result
+    data = record.get("data")
+    if not isinstance(data, bytes):
+        image = record.get("image")
+        if image is None:
+            return False
+        from app.core.image_io import to_png_bytes
+
+        data = to_png_bytes(image)
+        st.session_state.pop(namespace, None)
+    remember_pending(data, str(record.get("filename", "image")))
+    st.session_state["confidence_threshold"] = float(result.confidence_threshold)
+    st.session_state["iou_threshold"] = float(result.iou_threshold)
+    return True
 
 
 def stored_analysis(namespace: str, signature: tuple[Any, ...]) -> dict[str, Any] | None:

@@ -208,23 +208,40 @@ def test_home_session_panel_starts_empty_and_invents_nothing(tmp_path):
     assert "mean confidence" not in visible.lower()
 
 
-def test_home_states_the_flow_in_three_steps(tmp_path):
+def test_home_states_the_workflow_as_one_line(tmp_path):
+    """Three equal-weight columns were clutter; the flow is one wrapping line."""
     at = _run_page(tmp_path, "home")
     text = _page_text(at)
-    assert "How it works" in text
-    assert text.count("How it works") == 1
+    assert text.count('class="jd-flow"') == 1
     for station in ("Choose an image", "Analyse", "Review and download"):
         assert station in text
+    # No numbered three-column block survives on Home.
+    assert 'class="jd-step"' not in text
+    assert "How it works" not in text
 
 
-def test_home_shows_one_secondary_specimen(tmp_path):
-    """One small plate, captioned as an illustration, after the work surface."""
+def test_home_shows_no_placeholder_illustration(tmp_path):
+    """A drawn abstraction read as an unfinished placeholder in review, so it is gone.
+
+    Home may only show imagery that a real analysis produced.
+    """
     at = _run_page(tmp_path, "home")
     text = _page_text(at)
-    assert text.count('class="jd-specimen"') == 1
-    assert "Illustration." in text
-    # It follows the upload card, so it can never be mistaken for the entry point.
-    assert text.index("Start an analysis") < text.index('class="jd-specimen"')
+    assert 'class="jd-specimen"' not in text
+    assert "<svg" not in text
+    assert not at.get("image"), "Home shows an image before any analysis exists"
+    assert "Illustration" not in text
+
+
+def test_home_uses_one_bordered_surface(tmp_path):
+    """The uploader is the page; supporting content is unboxed."""
+    source = (PROJECT_ROOT / "app" / "views" / "home.py").read_text(encoding="utf-8")
+    assert source.count("with card(") == 1
+    at = _run_page(tmp_path, "home")
+    assert len(at.file_uploader) == 1
+    # Session information is a panel (a rule and a heading), not a card.
+    assert at.get("popover") == []
+    assert "This session" in _page_text(at)
 
 
 def test_home_specimen_is_unchanged_apart_from_the_marking():
@@ -279,10 +296,82 @@ def test_detect_opens_the_image_staged_on_home(tmp_path, png_bytes):
     assert not at.metric
 
 
+def test_home_stacks_workspace_before_session_on_narrow_screens(tmp_path):
+    """Columns wrap in source order, so mobile sees the uploader first."""
+    at = _run_page(tmp_path, "home")
+    assert len(at.columns) == 2
+    assert len(at.columns[0].file_uploader) == 1
+    assert "This session" in _texts(at.columns[1].markdown)
+
+
+def test_home_uses_no_fixed_pixel_widths():
+    """A wrapped column plus intrinsic widths is what makes the page responsive."""
+    source = (PROJECT_ROOT / "app" / "views" / "home.py").read_text(encoding="utf-8")
+    assert not re.search(r"width=\s*\d", source)
+    assert "stretch" in source
+
+
+def test_every_icon_is_material_symbols():
+    """One icon family only, through the APIs that render it natively."""
+    sources = [PROJECT_ROOT / "app" / "ui" / "components.py"] + sorted(
+        (PROJECT_ROOT / "app" / "views").glob("*.py")
+    )
+    icons: list[str] = []
+    for path in sources:
+        text = path.read_text(encoding="utf-8")
+        icons.extend(re.findall(r"icon=\s*[\"']([^\"']+)[\"']", text))
+    assert icons, "no icons found to check"
+    for icon in icons:
+        assert icon.startswith(":material/"), f"non-Material icon in a page: {icon!r}"
+        assert icon.endswith(":"), f"malformed Material icon: {icon!r}"
+        assert icon.isascii(), f"emoji icon: {icon!r}"
+
+
+def test_home_reopens_the_last_real_result(tmp_path, monkeypatch, png_bytes):
+    """The latest analysis is shown as its own annotated output and can be reopened."""
+    weights = tmp_path / "best.pt"
+    weights.write_bytes(b"stub")
+    monkeypatch.setenv(config.ENV_REGISTRY_PATH, str(_write_single_model_registry(tmp_path, weights)))
+    _install_fake_model(monkeypatch, [(40, 30, 160, 150, 0.91, 0), (180, 60, 290, 200, 0.62, 0)])
+
+    detect = _run_page(tmp_path, "detect")
+    detect.file_uploader[0].upload("sample.png", png_bytes, "image/png").run()
+    detect.button[0].click().run()
+    assert not detect.exception, detect.exception
+    record = detect.session_state["detect_analysis"]
+
+    home = _run_page(tmp_path, "home")
+    home.session_state["detect_analysis"] = record
+    home.session_state["detection_runs"] = detect.session_state["detection_runs"]
+    home.run()
+    assert not home.exception, home.exception
+
+    text = _page_text(home)
+    assert "sample.png" in text
+    assert "2 detections" in text
+    assert format_ms(record["total_ms"]) in text
+    assert len(home.get("image")) == 1, "the annotated output is the only image"
+
+    # Opening it restores the image and the thresholds that produced it.
+    labels = [button.label for button in home.button]
+    assert labels == ["Open this result"]
+    home.button[0].click().run()
+    assert not home.exception, home.exception
+    staged = home.session_state["pending_image"]
+    assert staged["filename"] == "sample.png"
+    assert staged["data"] == record["data"]
+    assert home.session_state["confidence_threshold"] == record["outcome"].result.confidence_threshold
+    assert home.session_state["iou_threshold"] == record["outcome"].result.iou_threshold
+
+
 def test_privacy_and_scope_are_stated_where_they_belong(tmp_path):
+    """The rail carries navigation and state only; the guarantee lives on Home."""
+    home = _page_text(_run_page(tmp_path, "home"))
+    assert "never stored" in home
+
     at = _run_main()
     rail = _texts(at.sidebar.markdown) + " " + _texts(at.sidebar.caption)
-    assert "never stored" in rail
+    assert "never stored" not in rail
 
     help_page = _page_text(_run_page(tmp_path, "help"))
     assert "Detection is not recognition" in help_page
@@ -326,10 +415,17 @@ def test_detect_offers_an_upload_control_and_no_technical_detail(tmp_path):
     assert "choose an image" in text
 
 
-def test_detect_explains_accepted_files_and_size_limit(tmp_path):
-    text = _page_text(_run_page(tmp_path, "detect"))
-    assert "JPG, PNG, WEBP or BMP" in text
-    assert "25 MB" in text
+def test_detect_states_accepted_files_and_size_limit_once(tmp_path):
+    """Formats and limit come from the uploader itself, not a duplicate caption."""
+    at = _run_page(tmp_path, "detect")
+    proto = at.file_uploader[0].proto
+    assert {item.lstrip(".").lower() for item in proto.type} == {
+        item.lstrip(".").lower() for item in config.SUPPORTED_IMAGE_TYPES
+    }
+    assert proto.max_upload_size_mb == config.MAX_UPLOAD_MB
+    text = _page_text(at)
+    assert "JPG, PNG, WEBP or BMP" not in text
+    assert "25 MB" not in text
 
 
 def test_detect_keeps_thresholds_behind_a_params_popover(tmp_path, png_bytes):

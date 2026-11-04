@@ -424,7 +424,7 @@ earlier rule, this section wins.
 | Corners are 2px; type scale is nine steps | Radii are 8px (cards) and 6px (controls); type is seven steps: 0.72 / 0.78 / 0.84 / 0.88 / 0.94 / 1.06 / 1.375 rem |
 | Spacing scale 4–96px (`--jd-1`…`--jd-9`) | Spacing scale 4/8/12/16/24/32/48px (`--jd-1`…`--jd-7`) |
 | Plates, caption strips, crop marks, flow rules, footers | Page header, card, card header, fact strip, detection list, empty state, note, steps, bullets, readout, specimen |
-| Home mounts the specimen twice with a primary CTA button | Home is an entry point: the upload control is the primary action and hands off to Detect without inferring; one small captioned plate remains |
+| Home mounts the specimen twice with a primary CTA button | Home is an entry point: the native upload control is the primary action and hands off to Detect without inferring; the drawn specimen is gone, replaced by the annotated output of the latest real analysis (or nothing, for a new session) |
 | Filters/panel colour: white only | Three surfaces are allowed: canvas `#F4F2ED`, cards `#FFFFFF`, rail `#1E2122` |
 | Ochre only in the primary action, focus and annotations | Ochre also draws the 2px active rule in the rail; it still never fills a panel, badge or tinted section |
 
@@ -449,3 +449,27 @@ earlier rule, this section wins.
   high-specificity repainting of Streamlit internals.
 - `app/ui/components.py` primitives carry no logic; every number they render is passed in
   from a measurement.
+
+### 9.1 Visual refinement after browser review
+
+The first Stage 0–1 build was reviewed in a desktop browser and read as sparse and
+disorganised. The refinement pass changed:
+
+- **One bordered surface on Home.** The uploader is the page; the session panel, the
+  camera link and the workflow line are unboxed, separated by a rule and 24–32px of
+  space. The illustration is removed: a drawn abstraction reads as a placeholder, and no
+  honest product preview can be produced without weights or a browser to capture the
+  running interface.
+- **The latest real result replaces it**, showing the annotated output, filename, count
+  and measured total, and reopening that exact analysis on Detect with its image and
+  thresholds restored. A new session shows one sentence instead.
+- **The uploader is the primary action.** Its native browse control is the only filled
+  ochre button on Home; the dropzone keeps its white surface, and the duplicate
+  format/size caption is deleted because the widget already states both.
+- **The workflow is one wrapping line**, not three equal-weight columns.
+- **The rail is legible and quieter.** Destinations move to `#CBD0CC` (≈10:1) with a 3px
+  ochre rule, a 10% white wash and 40px rows on the active item; the section labels are
+  11–12px uppercase; the footer is a dot and two words, with the privacy guarantee moved
+  to Home where it belongs.
+- **Type and rhythm:** 24px page title, 15px body, 13px captions, 24px card padding,
+  one 1160px measure.

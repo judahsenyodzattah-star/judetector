@@ -1,10 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="190" height="36" viewBox="0 0 190 36" role="img" aria-label="JUDEtector">
-  <g fill="none" stroke="#EDEBE6" stroke-width="1.8" stroke-linecap="square">
-    <path d="M9 15v-4h4"/>
-    <path d="M21 11h4v4"/>
-    <path d="M25 21v4h-4"/>
-    <path d="M13 25H9v-4"/>
-  </g>
-  <line x1="11" y1="18" x2="23" y2="18" stroke="#C08A1E" stroke-width="2.4" stroke-linecap="square"/>
-  <text x="36" y="24.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="600" fill="#F4F2ED" letter-spacing="-0.2">JUDEtector</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="168" height="36" viewBox="0 0 168 36" role="img" aria-label="JUDEtector">
+  <text x="0" y="25" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="18" font-weight="600" letter-spacing="-0.2" fill="#F4F2ED">JUDEtector</text>
+  <circle cx="160" cy="20" r="2.6" fill="#C08A1E"/>
 </svg>

@@ -87,7 +87,7 @@ def render() -> None:
                             source="camera",
                             image=image,
                             filename=filename,
-                            data_length=len(data),
+                            data=data,
                             spec=spec,
                             confidence=confidence,
                             iou=iou,
