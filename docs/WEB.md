@@ -9,7 +9,7 @@ web/
   app/            routes: /, /detect, /camera, /help, /api/detect (proxy)
   components/     uploader, session panel, overlay, results, notices, nav
   lib/            API client, session state, formatting, limits, breakpoints
-  tests/          55 Vitest + Testing Library tests, plus captured API fixtures
+  tests/          61 Vitest + Testing Library tests, plus captured API fixtures
 ```
 
 ## The upload size question, answered first
@@ -28,7 +28,7 @@ a configuration problem: the platform refuses the body before the function runs.
 Cloud Run, by contrast, admits the full request (25 MB plus ~256 KiB of
 multipart framing is well inside 32 MiB).
 
-**Decision (pending your approval): send the image directly from the browser to
+**Decision (approved 2026-11-04): send the image directly from the browser to
 the API for analysis.**
 
 - The UI is still served by Vercel; the read-only endpoints (`/v1/health`,
@@ -38,9 +38,11 @@ the API for analysis.**
   `multipart/form-data` POST with no custom headers is a CORS-simple request, so
   there is no preflight — one request, 25 MB, unchanged.
 - The API already supports this; a deployment sets `JUDETECTOR_CORS_ORIGINS` to
-  the web origin. Exposing `RateLimit-*` and `Retry-After` in
-  `Access-Control-Expose-Headers` is the only API-side addition, and it changes
-  no response field.
+  the exact web origin(s) — no wildcard. Exposing `RateLimit-*` and `Retry-After`
+  in `Access-Control-Expose-Headers` is the only API-side addition, and it
+  changes no response field.
+- The same-origin proxy at `/api/detect` is kept for **local development only**.
+  It is not part of the production path and it is not a fallback.
 
 Nothing in this stage reduces the 25 MB limit. The alternatives were considered
 and rejected: a proxy cannot work (above), lowering the limit silently was not
@@ -52,13 +54,64 @@ proxy at `/api/detect` is used and the 4.5 MB limit does not exist. That proxy
 refuses an over-limit body **explicitly** on Vercel (`upload_over_proxy_limit`)
 rather than letting the platform fail opaquely.
 
+## CORS: verified, and what it is not
+
+Approved transport, checked against a live server and encoded in
+`tests/test_api_cors.py` (11 tests) and `web/tests/transport.test.ts` (6 tests):
+
+| Property | Verified behaviour |
+|---|---|
+| Simple request | `multipart/form-data` POST with no custom headers is CORS-simple: **no preflight**, one request, 25 MB intact |
+| Preflight, if one ever happens | `OPTIONS /v1/detect` answers `200` with the exact origin, `POST` allowed, `content-type` allowed, `max-age=600` |
+| Unknown request headers | `400`; the advertised allow-list never names `authorization`, so adding auth later is a deliberate configuration change |
+| Error responses | `413`, `415`, `422`, `429` and `503` all carry `Access-Control-Allow-Origin` **and** expose `RateLimit-*` and `Retry-After`, so a browser can read the reason instead of seeing an opaque failure |
+| Unlisted origin | No `Access-Control-Allow-Origin` header at all |
+| Non-browser client | Served normally — **CORS never protected the endpoint** |
+
+**CORS is not an authorisation mechanism.** It stops *other web pages* from
+reading responses from your origin. It does nothing against `curl`, a script, a
+scraper or a native app, and it must never be described as access control. The
+endpoint is public and unauthenticated by design; the protections that matter
+are listed below.
+
+## Before this endpoint is exposed publicly
+
+Present today and unchanged by this stage:
+
+- Upload cap enforced twice — from `Content-Length` before parsing and while
+  streaming (25 MB), plus a 40-megapixel budget checked before decode.
+- Detected-format allowlist (JPG/PNG/WEBP/BMP); the filename is ignored.
+- Annotated PNG size cap, so no response can balloon.
+- A per-instance rate limiter (default 30/min) with honest `RateLimit-Scope`.
+- No request bodies logged, no storage, no history.
+
+Still required before the endpoint is genuinely public — **none of it is done
+yet**, and Stage 3 is where it belongs:
+
+1. **Global rate limiting at the edge** — Cloud Armor rate-limit rules, API
+   Gateway quotas or Cloudflare. The in-process limiter is per instance, so with
+   N replicas a client gets N times the quota.
+2. **Instance and concurrency ceilings** on Cloud Run (max instances, request
+   timeout), so a burst cannot fan out without bound.
+3. **Alerting** on 5xx rate, 429 rate and request latency.
+4. **Budget guardrails** — Cloud Run max instances plus a billing alert.
+5. **Ingress restriction** where possible: allow only the edge/proxy path, keep
+   the service URL out of client code if a stable custom domain is used.
+6. **A decision on authentication** before any non-public use; if one is added,
+   `Access-Control-Allow-Headers` must be extended deliberately and the origin
+   list kept exact.
+7. **Abuse review** of the anonymous endpoint: image uploads are the expensive
+   operation, so the cost of a hostile client should be estimated and capped
+   before launch.
+
 ## Configuration
 
 | Variable | Where | Meaning |
 |---|---|---|
 | `API_INTERNAL_URL` | server | Base URL used by the Next.js server for health and model card (default `http://127.0.0.1:8000`) |
 | `NEXT_PUBLIC_API_BASE_URL` | build + browser | Public API origin. Setting it switches detection to the direct transport |
-| `NEXT_PUBLIC_DETECT_TRANSPORT` | build + browser | `direct` or `proxy`; overrides the automatic choice |
+| `NEXT_PUBLIC_DETECT_TRANSPORT` | build + browser | `direct` or `proxy`; overrides the automatic choice (proxy is for local development) |
+| `JUDETECTOR_CORS_ORIGINS` | API deployment | exact web origin(s), comma-separated; empty means no cross-origin access |
 
 ## Run it
 
@@ -157,7 +210,7 @@ not as a gap. `tests/guardrails.test.ts` fails if `localStorage`,
 ## Tests
 
 ```bash
-cd web && npm test          # 55 tests, 7 files
+cd web && npm test          # 61 tests, 8 files
 npm run typecheck           # tsc --noEmit
 npm run build               # production build
 ```
@@ -169,6 +222,11 @@ all seven error states, model-unavailable and status-unknown behaviour,
 navigation and active states at three breakpoints, session memory and its
 release semantics, no-storage and no-fabrication guards, and the required
 breakpoints in the stylesheet.
+
+`web/tests/transport.test.ts` pins the approved transport: with an API origin
+configured, detection addresses `…/v1/detect` and never `/api/detect`, adds no
+header that could force a preflight, and the proxy stays reachable only when no
+origin is set.
 
 `web/tests/fixtures/*.json` are real responses captured from the API; the Python
 suite (`tests/test_web_contract.py`) asserts they still match the published

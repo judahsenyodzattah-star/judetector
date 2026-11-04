@@ -228,10 +228,10 @@ Run with `cd web && npm test`; typecheck with `npm run typecheck`; build with
 ## Current result
 
 ```
-287 passed
+298 passed
 ```
 
-Web: `55 passed` (7 files) via `cd web && npm test`.
+Web: `61 passed` (8 files) via `cd web && npm test`.
 
 Test counts by module are reported in the pull request. UI tests are marked `ui` and
 model-dependent tests would be marked `slow` (none currently require a real model).

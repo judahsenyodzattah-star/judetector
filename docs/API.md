@@ -237,6 +237,32 @@ Images are decoded, analysed and annotated in memory. Nothing is written to
 disk, no request body is logged, and there is no history endpoint. The annotated
 PNG is returned inline rather than stored.
 
+## Cross-origin access (CORS)
+
+The web app calls this service directly from the browser for `POST /v1/detect`
+(Vercel cannot carry a 25 MB upload through a Function). Cross-origin behaviour
+is therefore part of the contract:
+
+- Origins come from `JUDETECTOR_CORS_ORIGINS`, comma-separated and matched
+  exactly. Empty — the default — means **no** cross-origin access.
+- A `multipart/form-data` POST with no custom headers is CORS-simple: no
+  preflight, one request.
+- Preflights are answered for `POST` with `content-type` and `x-request-id`
+  allowed, `max-age=600`. Any other requested header is refused with `400`, so
+  adding an `authorization` header later is an explicit change here.
+- `Access-Control-Expose-Headers` lists `X-Request-Id`, `Server-Timing`,
+  `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`,
+  `RateLimit-Scope` and `Retry-After`, so a browser can read timings, the quota
+  and the retry hint — including on `413`, `415`, `422`, `429` and `503`.
+
+**CORS is not authorisation.** It only stops other web pages from reading
+responses. This endpoint is public and unauthenticated: any script can call it.
+The safeguards that actually apply are the upload caps, the pixel budget, the
+format allowlist, the annotated-size cap and the per-instance rate limiter
+described above. Global rate limiting belongs at the edge (Cloud Armor, API
+Gateway, Cloudflare) or in a shared store. The full pre-exposure checklist is in
+[`docs/WEB.md`](WEB.md#before-this-endpoint-is-exposed-publicly).
+
 ## Measured on this machine
 
 Stage 0, no ML stack and no weights:

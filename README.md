@@ -164,9 +164,11 @@ cd web && npm test && npm run build
 through a Next.js Route Handler on Vercel. Cloud Run accepts the full 25 MB
 request. The app therefore reads health and the model card server-side and sends
 `/v1/detect` **directly** from the browser to the API (CORS) when
-`NEXT_PUBLIC_API_BASE_URL` is set; locally it uses the same-origin proxy, which
-refuses an over-limit body explicitly on Vercel instead of failing opaquely.
-No upload limit was reduced.
+`NEXT_PUBLIC_API_BASE_URL` is set; the same-origin proxy is kept for local
+development only and refuses an over-limit body explicitly on Vercel instead of
+failing opaquely. No upload limit was reduced. CORS is not treated as security:
+the endpoint stays public, and the edge-limiter and alerting work that public
+exposure still needs is listed in [`docs/WEB.md`](docs/WEB.md#before-this-endpoint-is-exposed-publicly).
 
 Full notes: [`docs/WEB.md`](docs/WEB.md).
 

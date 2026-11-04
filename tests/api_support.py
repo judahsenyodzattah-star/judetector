@@ -52,10 +52,18 @@ def install_fake_model(monkeypatch, rows=None, *, loader_error: Exception | None
     return fake
 
 
-def post_image(client: TestClient, data: bytes, **form):
+def post_image(
+    client: TestClient,
+    data: bytes,
+    *,
+    headers: dict[str, str] | None = None,
+    filename: str = "sample.png",
+    **form,
+):
     payload = {"confidence": 0.25, "iou": 0.45, **form}
     return client.post(
         "/v1/detect",
-        files={"file": ("sample.png", data, "image/png")},
+        files={"file": (filename, data, "image/png")},
         data=payload,
+        headers=headers or {},
     )
