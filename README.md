@@ -173,7 +173,11 @@ exposure still needs is listed in [`docs/WEB.md`](docs/WEB.md#before-this-endpoi
 Full notes: [`docs/WEB.md`](docs/WEB.md). Deployment plan, costs, abuse
 protection, the model-weight blocker, the acceptance checklist and rollback:
 [`docs/STAGE3_DEPLOYMENT_READINESS.md`](docs/STAGE3_DEPLOYMENT_READINESS.md) —
-prepared, not executed.
+prepared, not executed. Plans and prices verified against the vendors' current
+pages, the protected-preview route, the recurring-cost floor and the corrected
+rollback: [`docs/STAGE3_PREFLIGHT_VERIFICATION.md`](docs/STAGE3_PREFLIGHT_VERIFICATION.md).
+The reviewer's browser procedure:
+[`docs/ACCEPTANCE_RUNBOOK.md`](docs/ACCEPTANCE_RUNBOOK.md).
 
 ## Application sections
 

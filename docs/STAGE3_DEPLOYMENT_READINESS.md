@@ -9,6 +9,11 @@ below was read from the vendor's own page on **2026-11-04**; every number that
 could not be established from this environment is labelled as such rather than
 estimated into a fact.
 
+**Revised after the preflight round (2026-11-04):** decisions D2, D5 and D7 have
+changed, and the kill switch in §4 and §8 has been corrected. The verification
+behind those changes is in [`STAGE3_PREFLIGHT_VERIFICATION.md`](STAGE3_PREFLIGHT_VERIFICATION.md);
+the browser procedure referred to in §7 is [`ACCEPTANCE_RUNBOOK.md`](ACCEPTANCE_RUNBOOK.md).
+
 Sources used for limits and prices:
 
 - Cloud Run pricing — `cloud.google.com/run/pricing`
@@ -27,13 +32,13 @@ Sources used for limits and prices:
 
 | # | Decision | Recommendation |
 |---|---|---|
-| D1 | **Merge PR #3 or deploy a branch?** Production deployments read from a production branch. `main` does not contain `web/` yet. | Merge PR #3 after review, then deploy `main`. Branch-only deployment is possible but is not a production procedure. |
-| D2 | Vercel plan | **Pro ($20/month per deploying seat, including $20 usage credit)** — Hobby is for personal, non-commercial projects. |
+| D1 | **Merge PR #3 or deploy a branch?** `main` does not contain `web/` yet. | **Keep PR #3 unmerged.** Use a Vercel *preview* deployment of `arena/72af7497-judetector` with Standard Protection (Vercel Authentication), and pin CORS to that branch URL. A free, reversible rehearsal of the real build; merging remains a separate decision. |
+| D2 | Vercel plan | **Hobby ($0) first.** It is non-commercial, takes no payments or advertising, and never proxies uploads. Hobby includes Vercel Authentication under Standard Protection; Password Protection is Pro-only and is not needed. Revisit only if the project becomes commercial. |
 | D3 | Public hostnames | `app.<domain>` on Vercel and `api.<domain>` on Cloud Run (custom domain map). The exact web origin goes into `JUDETECTOR_CORS_ORIGINS`. |
 | D4 | Warm start | **Start with `min-instances=0`** (scale to zero, $0 idle). Move to 1 only if measured cold start hurts, at ≈$19.71/month. |
-| D5 | Abuse protection tier | **Cloudflare in front of the API** (free plan: 1 rate-limit rule, 10 s window; Pro adds rules and longer windows). Cloud Armor + load balancer is the GCP-native alternative at ≈$24.25/month before request charges. |
+| D5 | Abuse protection tier | **Cloudflare Free in front of the API**, 1 rate-limit rule (5 requests / 10 s per IP) for single-source floods — **no bot challenge (D8)**. Accept that edge bypass cannot be fully closed for free: Cloudflare needs a Cloud Run domain mapping, and a client sending the mapped `Host` to Google's frontend still reaches the service. Free closure options: disable the default `run.app` URL ($0) and/or a shared-secret request header ($0, needs a small opt-in API change). Cloud Armor + LB closes it properly at ≈$24.25/month before request charges, which conflicts with D7. |
 | D6 | Model weights source | **The author's `best.pt` only.** No substitute, no retrain, no synthetic model on a public deployment. If weights are unavailable, publish the honest degraded state instead. |
-| D7 | Budget ceiling | **$25/month** with alerts at 50 % / 90 % / 100 %, Cloud Run `max-instances=3`, and a documented kill switch. |
+| D7 | Budget ceiling | **$5/month recurring target, review at $20/month.** A $5 budget with email alerts at 50 / 90 / 100 % — **alerts only, notifications, not a cap**. The only hard stop is a **spend cap budget on `run.googleapis.com`** (pauses that service in that project for the rest of the month; does not pause Artifact Registry or Cloud Storage). Plus `max-instances=3` and the corrected kill switch in §8. |
 | D8 | Bot challenge | Deferred. Turnstile/reCAPTCHA would require a contract addition (a token to verify), so it is a separate approval. |
 
 ---
@@ -129,11 +134,17 @@ analysis is needed later, it gets its own API origin, not a wildcard.
 
 ### Cost posture on Vercel
 
-Hobby: $0, with 1M CDN requests, 100 GB fast data transfer and 1M function
-invocations per month included, and Vercel's firewall rate limiting at 1M allowed
-requests/month. Pro: **$20/month** including a $20 usage credit, Flat Rate CDN,
-and spend management. Traffic here is almost entirely static + SSR on small
-payloads; the 25 MB bodies never touch Vercel.
+**Hobby, $0** (decision D2). Included per month: 100 GB fast data transfer, 1M
+function invocations, 10 GB fast origin transfer, 4 CPU-hours of Active CPU,
+360 GB-hours of provisioned memory; 100 deployments/day, 1 concurrent build, 45 min
+build limit, 1-hour runtime logs. Hobby has **no on-demand billing**, so exceeding
+an allotment stops the feature instead of invoicing for it. Pro ($20/month per
+deploying seat, including a $20 usage credit) buys commercial use, Password
+Protection and longer logs — none of which this project requires.
+
+Traffic here is almost entirely static + SSR on small payloads; the 25 MB bodies
+never touch Vercel. One Hobby caveat to plan around: 1-hour log retention means the
+Vercel logs cannot serve as the audit trail — Cloud Run logs are the record.
 
 ---
 
@@ -236,28 +247,31 @@ gcloud run deploy judetector-api \
 | Warm instance (`min-instances=1`, 1 vCPU / 2 GiB, idle rate) | **$19.71 / month** |
 | Global external load balancer forwarding rule (if Cloud Armor route) | **$18.25 / month** |
 | Cloud Armor Standard (1 policy + 1 rule) | **$6.00 / month** + $0.75/M requests |
-| Cloudflare rate limiting | Free plan: $0 (1 rule, 10 s window). Pro: paid plan, verify current price |
+| Cloudflare rate limiting | **Free plan: $0** (1 rule, 10 s counting window, IP characteristic only, no regex). Pro: **$20/month billed annually, $25 billed monthly** — not needed |
 | Artifact Registry (≈2.5 GiB image, 0.5 GiB free) | **$0.20 / month** |
 | Cloud Storage weights (<1 GiB) | cents; verify with the GCS pricing page |
 | Response egress | Volume dominates, not rate: at ~150 KiB per annotated response, 100k analyses ≈ 15 GB. Apply the current Premium-tier egress rate to that volume |
-| Vercel | **$0** (Hobby) or **$20** (Pro) |
+| Vercel | **$0** (Hobby — the proposed plan) |
 
-**Expected total for a reviewed, low-traffic deployment: $0.20–$0.50/month on
-Cloud Run plus the Vercel plan**, assuming scale-to-zero and the Cloudflare free
-tier. The $3.48 and $81.78 rows exist to show what scaling would cost, not as a
-forecast.
+**Expected total for a reviewed, low-traffic deployment: ≈$0.22–$0.50/month**,
+assuming scale-to-zero, Vercel Hobby and Cloudflare Free. The $3.48 and $81.78
+rows exist to show what scaling would cost, not as a forecast.
+
+**The unavoidable floor is ≈$0.22/month** — Artifact Registry image storage plus
+the weights object — because neither is paused by scale-to-zero, `min-instances=0`
+or a spend cap. Everything else in this table is usage-based or optional.
 
 ### Safeguards against unexpected charges (in the order they bite)
 
 1. **Cloud Run `max-instances=3`** — the hard cost ceiling. Fully saturated for 24 hours it costs $7.52; nothing can multiply beyond 3 instances.
 2. **Request timeout 120 s** and **concurrency 4** — a stuck request cannot bill indefinitely, and one instance cannot be over-subscribed.
 3. **`min-instances=0`** — no idle charge exists to forget about.
-4. **Budgets and alerts** on the billing account at $5 / $20 / $50, with email to the owner. A Pub/Sub-triggered Cloud Function can disable billing automatically; recommend alert-only first so a legitimate spike does not take the site down.
+4. **Budgets and alerts** — a $5 budget with email alerts at thresholds (review at $20). **These are notifications only and must never be described as a cap**; spending continues after they fire. The hard stop is separate: a **spend cap budget** on `run.googleapis.com`, which at 100 % of its amount pauses new usage of Cloud Run in that project for the rest of the month. Limits of that cap, stated plainly: one project, one service, monthly period, gross estimated list prices only, in-flight requests finish, and **persistent resources (Artifact Registry, Cloud Storage) keep billing**. It can also only exist once a billing account exists — i.e. it is configured in the same change as the first deployment, not afterwards.
 5. **Project-level quota** for Cloud Run container instances (e.g. 5) as a second ceiling outside the service config.
 6. **Vercel spend management** (Pro): a hard limit that stops usage rather than billing over it.
 7. **Edge rate limiting** (§5) so hostile volume is rejected before it reaches a billable instance.
 8. **Log-based alert** on 429 rate and 5xx rate; a sudden 429 spike means the limiter is doing its job, a 5xx spike means something else is wrong.
-9. **Kill switch** — `gcloud run services update judetector-api --max-instances=0` stops all serving instantly; Vercel rollback or domain removal covers the frontend.
+9. **Kill switch** — `gcloud run services update judetector-api --region us-central1 --ingress internal` blocks all public traffic immediately (the service stays deployed and configured). *(Corrected: the earlier draft said `--max-instances=0`, which Cloud Run does not accept — the minimum is 1.)* Vercel rollback covers the frontend.
 
 ---
 
@@ -271,7 +285,7 @@ shield, not protection. The layers below are cumulative; D5 picks layer 2.
 |---|---|---|---|---|
 | 0 (present) | 25 MB cap, 40 MP cap, format allowlist, annotated-size cap, per-instance limiter, 120 s timeout | Accidental floods, oversized payloads, malformed files | $0 | Already in the service |
 | 1 (present, tuned) | `max-instances=3`, `concurrency=4` | Cost blow-up from parallel work | $0 | A hard ceiling, not a filter |
-| 2a (**recommended**) | **Cloudflare** in front of `api.<domain>` — rate limit rule on IP (free plan: 1 rule, 10 s window, e.g. 5 requests / 10 s, mitigation 10 s), plus Bot Fight Mode | Single-source floods, basic bots | $0 (free) / Pro plan for more rules | Needs a Cloud Run domain mapping and the orange-cloud proxy; Cloudflare then sets `X-Forwarded-For`, so `JUDETECTOR_TRUST_PROXY=true` |
+| 2a (**recommended**) | **Cloudflare Free** in front of `api.<domain>` — one rate-limit rule on IP (5 requests / 10 s, mitigation 10 s). **No bot challenge (D8)** | Single-source floods | $0 | Requires a domain you own plus a free Cloud Run domain mapping, because Cloud Run routes by `Host`. **Bypass is only partly closable for free** — see `STAGE3_PREFLIGHT_VERIFICATION.md` §1. Do not set `JUDETECTOR_TRUST_PROXY=true` until the proxy is actually in front, or clients can spoof `X-Forwarded-For` |
 | 2b | **Cloud Armor Standard** + global external Application Load Balancer, per-IP rate limit rule | Same as 2a, inside GCP | ≈$24.25/month + $0.75/M requests | GCP-native logging and tuning; heavier setup; LB becomes the public entry point |
 | 3 | Turnstile / reCAPTCHA issued by the web app, verified by the API | Scripted clients without a browser | Free tier available | **Requires a contract addition** (a token field or header) — needs approval, out of scope here |
 | 4 | Monitoring and alerting | Slow-burn abuse | $0 | 429/5xx rates, p95 latency, instance count |
@@ -327,6 +341,11 @@ demonstration of the product.
 
 Run against the deployed pair (Vercel + Cloud Run with weights), and record the
 result of each line. Every row has an observable pass condition.
+
+The browser-facing half of this — browsers, widths, test-data kit, evidence
+capture, defect severities and sign-off — is [`ACCEPTANCE_RUNBOOK.md`](ACCEPTANCE_RUNBOOK.md).
+The tables below are the API-level contract those browser steps exercise; the two
+documents are meant to be run together.
 
 ### Upload
 
@@ -431,7 +450,7 @@ traffic and artefact operation. Both sides are independent.
    `gcloud run deploy judetector-api --image .../api@sha256:<known-good> --region us-central1`
 3. **Bad weights** (weights load but produce nonsense): roll the FUSE mount's bucket path back to the previous object version, or point `JUDETECTOR_MODEL_PATH` at the previous file and deploy a revision. Model rollback never requires an image change.
 4. **Config fault** (CORS, rate limit, proxy trust): change the environment variable on the service and deploy a revision; keep the previous revision available for the split.
-5. **Emergency stop**: `gcloud run services update judetector-api --region us-central1 --max-instances=0` — the service immediately stops serving while remaining configured.
+5. **Emergency stop**: `gcloud run services update judetector-api --region us-central1 --ingress internal` — public traffic stops immediately while the service remains configured and the revision is preserved for inspection. *(Corrected: `--max-instances=0` is not a valid Cloud Run value.)* `gcloud run services delete` is the next step if compute must stop entirely; the image and its storage remain and keep billing.
 6. **Edge**: disable the Cloudflare rate-limit rule (or the Cloud Armor policy) if it is blocking legitimate traffic; both are one toggle and take effect within seconds.
 7. **DNS**: Cloudflare/LB records are the last resort — repoint to a maintenance page.
 
@@ -456,3 +475,6 @@ Nothing in this document has been executed. Explicit approval is still required
 for: merging PR #3, creating the Vercel project, enabling GCP billing, creating
 buckets or service accounts, building and pushing images, deploying Cloud Run,
 purchasing any paid plan, and adding an edge proxy.
+
+Still open for a decision, after the preflight round: A1–A8 in
+[`STAGE3_PREFLIGHT_VERIFICATION.md`](STAGE3_PREFLIGHT_VERIFICATION.md) §7.
