@@ -24,6 +24,8 @@ data/raw/
 *.webp
 !docs/assets/*.png
 !docs/assets/*.jpg
+# Application brand marks are part of the interface (vector only)
+!assets/*.svg
 # Evaluation plots are small, non-sensitive and useful in the repo
 !metrics/curves/*.png
 
@@ -43,6 +45,15 @@ dist/
 .venv/
 venv/
 env/
+
+# ---- Web (Next.js) ----
+web/node_modules/
+web/.next/
+web/out/
+web/coverage/
+web/.turbo/
+web/next-env.d.ts
+web/tsconfig.tsbuildinfo
 
 # ---- Testing / tooling ----
 .pytest_cache/

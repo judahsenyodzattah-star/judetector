@@ -1,143 +1,99 @@
-"""Camera page: browser snapshot → detection (continuous video is out of scope)."""
+"""Camera — a browser snapshot analysed exactly like an upload.
+
+Snapshot only. Continuous video would need a WebRTC component and reachable
+STUN/TURN servers, so it is deliberately out of scope and never claimed.
+
+The layout mirrors Detect: capture on the left, result on the right, one explicit
+*Analyse snapshot* action.
+"""
 
 from __future__ import annotations
 
+from typing import Any
+
 import streamlit as st
 
-from app.components.model_sidebar import render_settings, select_model
-from app.components.pipeline import analyse_image
-from app.components.results import (
-    render_detection_table,
-    render_download_button,
-    render_no_detections_note,
-    render_summary_metrics,
+from app.components.results import format_ms, render_result_panel
+from app.components.settings import current_model, parameters
+from app.components.workflow import (
+    UNAVAILABLE_MESSAGE,
+    UNREADABLE_MESSAGE,
+    analyse_controls,
+    decode_image,
+    image_facts,
 )
-from app.components.status import (
-    render_model_caption,
-    render_scope_warning,
-    render_setup_help,
-)
-from app.core.errors import InvalidImageError
-from app.core.image_io import describe_image, downscale, load_image
-from app.core.runtime import get_detector
-from app.core.stats import DetectionRun, record_run_once
+from app.ui.components import card, meta, note, page_header
+from app.ui.theme import inject_theme
 
 __all__ = ["render"]
 
+NAMESPACE = "camera_analysis"
+
+
+def _summary(record: dict[str, Any] | None) -> str:
+    if record is None:
+        return "Not analysed yet"
+    outcome = record.get("outcome")
+    if outcome is None or not outcome.ok or outcome.result is None:
+        return "Unavailable"
+    result = outcome.result
+    noun = "detection" if result.count == 1 else "detections"
+    total = record.get("total_ms")
+    summary = f"{result.count} {noun}"
+    if isinstance(total, (int, float)) and total > 0:
+        summary += f" · {format_ms(total)}"
+    return summary
+
 
 def render() -> None:
-    st.title("Camera")
-    st.caption("Capture a browser camera snapshot and analyse it with the active model.")
+    inject_theme()
 
-    spec, model_error = select_model()
-    confidence, iou = render_settings()
+    spec, model_error = current_model()
 
-    if model_error:
-        st.error(f"Model configuration problem: {model_error}")
-        return
-    if spec is None:
-        return
+    heading, controls = st.columns([5, 1], gap="small", vertical_alignment="center")
+    with heading:
+        page_header("Camera", "Take a snapshot and analyse it the same way as an upload.")
+    with controls:
+        confidence, iou = parameters()
 
-    render_model_caption(spec)
-    render_scope_warning(spec)
+    image_column, result_column = st.columns([1.18, 1], gap="medium", wrap=True)
 
-    st.info(
-        "**Snapshot mode.** The browser captures a single still frame, which is then "
-        "analysed exactly like an uploaded image. Continuous live video is not part "
-        "of this milestone — see the note below.",
-        icon="📷",
-    )
+    filename = "camera_snapshot.png"
+    model_name = spec.display_name if spec is not None else "model unavailable"
+    record: dict[str, Any] | None = None
 
-    snapshot = st.camera_input(
-        "Take a snapshot",
-        help="Requires browser camera permission. Works over HTTPS or on localhost.",
-    )
+    with image_column:
+        with card(title="Snapshot", note="One still frame"):
+            snapshot = st.camera_input(
+                "Take a snapshot",
+                help="Your browser will ask for camera access.",
+                label_visibility="collapsed",
+            )
+            meta("One still frame per capture. Live video is not analysed.")
 
-    if snapshot is None:
-        st.caption(
-            "If no camera appears: grant camera permission in the browser, ensure the "
-            "page is served over HTTPS (or on localhost), and check that no other "
-            "application is holding the camera. A laptop without a webcam will show "
-            "no capture control — use the **Detect** page instead."
-        )
-        return
+            if snapshot is not None:
+                data = snapshot.getvalue()
+                image = decode_image(data)
+                if image is None:
+                    note(UNREADABLE_MESSAGE, tone="warn")
+                else:
+                    st.image(image, width="stretch", alt="The snapshot you just took")
+                    meta(f"{image_facts(image, filename)}", mono=True)
+                    if spec is None or model_error:
+                        note(UNAVAILABLE_MESSAGE, tone="warn")
+                    else:
+                        record = analyse_controls(
+                            namespace=NAMESPACE,
+                            source="camera",
+                            image=image,
+                            filename=filename,
+                            data=data,
+                            spec=spec,
+                            confidence=confidence,
+                            iou=iou,
+                            button_label="Analyse snapshot",
+                        )
 
-    try:
-        image = load_image(snapshot.getvalue())
-    except InvalidImageError as exc:
-        st.error(f"Could not read the camera capture — {exc}")
-        return
-
-    image, _ = downscale(image)
-    detector = get_detector(spec)
-    outcome = analyse_image(image, spec, detector, confidence=confidence, iou=iou)
-
-    original_column, processed_column = st.columns(2)
-    with original_column:
-        st.subheader("Snapshot")
-        st.image(image, width="stretch")
-        st.caption(describe_image(image))
-    with processed_column:
-        st.subheader("Processed")
-        if outcome.ok and outcome.processed is not None:
-            st.image(outcome.processed, width="stretch")
-            st.caption(f"{outcome.count} box(es) drawn · confidence ≥ {confidence:.2f}")
-        else:
-            st.info("No processed image: detection could not run.", icon="ℹ️")
-
-    if not outcome.ok:
-        if outcome.unavailable:
-            st.error(f"**{outcome.error_title}**\n\n{outcome.error_message}")
-            render_setup_help(spec)
-        else:
-            st.error(f"**{outcome.error_title}**\n\n{outcome.error_message}")
-        return
-
-    result = outcome.result
-    assert result is not None
-
-    st.divider()
-    render_summary_metrics(result, spec)
-    render_no_detections_note(result)
-    render_detection_table(result)
-    if outcome.processed is not None:
-        render_download_button(outcome.processed, "camera_snapshot.png")
-
-    record_run_once(
-        st.session_state,
-        DetectionRun(
-            source="camera",
-            filename="camera_snapshot.png",
-            model_id=spec.id,
-            face_count=result.count,
-            image_width=image.width,
-            image_height=image.height,
-            confidence_threshold=result.confidence_threshold,
-            iou_threshold=result.iou_threshold,
-            mean_confidence=result.mean_confidence,
-            min_confidence=result.min_confidence,
-            max_confidence=result.max_confidence,
-            inference_ms=result.inference_ms,
-            labels=result.labels_present,
-        ),
-        signature=(
-            "camera",
-            image.width,
-            image.height,
-            round(confidence, 2),
-            round(iou, 2),
-            result.count,
-        ),
-    )
-
-    with st.expander("Why snapshot instead of live video?"):
-        st.markdown(
-            """
-Continuous live video in Streamlit requires a WebRTC component plus reachable
-STUN/TURN servers, and is unreliable on free hosting tiers. Snapshot capture uses
-the browser's native camera API, works wherever the app is served over HTTPS, and
-reuses the same detection pipeline — so the feature is genuinely available rather
-than nominally available. Live streaming can be added later as a separate page
-without changing `DetectorService`.
-"""
-        )
+    with result_column:
+        with card(title="Results", note=_summary(record)):
+            render_result_panel(record=record, filename=filename, model_name=model_name)

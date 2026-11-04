@@ -5,9 +5,44 @@ headless = true
 [browser]
 gatherUsageStats = false
 
+[client]
+toolbarMode = "minimal"
+
+# Theme tokens mirror app/ui/theme.py. As much of the design language as possible
+# lives here, where Streamlit applies it to its own widgets consistently.
 [theme]
 base = "light"
-primaryColor = "#1F4E5F"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F4F7F9"
-textColor = "#1B2A33"
+primaryColor = "#8A5A00"
+backgroundColor = "#F4F2ED"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#16181A"
+borderColor = "#D0CBC1"
+baseRadius = "8px"
+buttonRadius = "6px"
+baseFontSize = 14
+font = "sans serif"
+headingFont = "sans serif"
+codeFont = "monospace"
+codeBackgroundColor = "#F4F2ED"
+codeTextColor = "#16181A"
+grayColor = "#52585C"
+grayBackgroundColor = "#F4F2ED"
+grayTextColor = "#52585C"
+linkColor = "#8A5A00"
+linkUnderline = false
+showWidgetBorder = true
+dataframeBorderColor = "#D0CBC1"
+dataframeHeaderBackgroundColor = "#F4F2ED"
+dataframeHeaderTextColor = "#52585C"
+showSidebarBorder = false
+headingFontSizes = ["22px", "17px", "15px", "14px", "14px", "13px"]
+headingFontWeights = [600, 600, 600, 600, 600, 600]
+
+# The navigation rail is the one dark surface in the product: it frames the
+# workspace and keeps the canvas light.
+[theme.sidebar]
+backgroundColor = "#1E2122"
+secondaryBackgroundColor = "#2A2E2F"
+textColor = "#EDEBE6"
+borderColor = "#33383A"
+primaryColor = "#8A5A00"

@@ -66,19 +66,158 @@ in about two seconds.
   by face count, and count empty runs separately.
 
 ### Interface — `tests/test_app_smoke.py`
-- The entry point renders; every page renders without exception.
-- Detect page exposes an uploader plus confidence/IoU sliders.
-- **End-to-end:** an uploaded image with a fake model produces `Detections = 2`,
-  mean confidence `76.5%`, a confidence range, two displayed images, a download
-  button, and a recorded session run.
-- **Honesty test:** with weights missing, an upload yields an error and **zero**
-  metrics, no download button and no recorded run.
-- Dashboard shows "No evaluation metrics recorded" and no metric widgets when no
+- The entry point opens Home; every page renders without exception.
+- Navigation is exactly Home, Detect, Camera, Help, with SVG (non-emoji) icons and
+  Home as the single default route; the developer page is hidden from that list and
+  routable at `/developer`.
+- The landing page holds one headline, one supporting sentence, one primary button
+  (*Analyse an image*) plus a camera page link, the same specimen mounted twice
+  (*Original* then *Annotated*) with the caption "Illustration, not an actual
+  detection result.", the flow as four stations, and a footer with the wordmark,
+  privacy line and a Help link. No marketing vocabulary, no second CTA pair, no emoji.
+- The two plates are asserted to be byte-identical once the marking rectangle is
+  removed, so the annotated plate shows the same specimen plus one outline and
+  nothing else. The artwork is asserted to contain no digits at all, so no invented
+  score, count or percentage can appear on the landing page.
+- Clicking *Analyse an image* lands on a page with a file uploader; the camera page
+  link is asserted to be present with its own label.
+- Detect exposes an uploader; thresholds live in one collapsed *Advanced settings*
+  panel; nothing is analysed until *Analyse image* is pressed.
+- **End-to-end:** an uploaded image with a fake model produces a readout of
+  `Detections = 2`, mean confidence `76.5%`, confidence range `62.0% – 91.0%` and the
+  applied thresholds, three displayed images (uploaded print, original, annotated),
+  a download button, and a recorded session run. The readout is asserted twice: on
+  the data (`readout_fields(result)`, exact label/value pairs) and on the page text.
+- **Honesty test:** without weights, pressing *Analyse image* shows
+  "Image analysis is temporarily unavailable", **no readout at all** (no count, no
+  confidence), no download, no recorded run and no technical vocabulary. The underlying cause is asserted to be
+  present in `session_state["last_analysis_error"]` and on the developer page.
+- Developer page shows "No evaluation metrics recorded" and no metric widgets when no
   record exists; a fixture record displays `0.8340 / 0.8100 / 0.7900` verbatim;
   an invalid record raises a visible error.
-- The subject-specific scope warning is present on working pages.
-- About page carries the student details, dataset scope and the
-  detection-is-not-recognition statement.
+- Help carries the three-step workflow, the privacy statement and the
+  detection-is-not-recognition limitation.
+
+### Icons — inside `tests/test_app_smoke.py`
+- Icons exist only on the four navigation entries; Material glyphs may appear in
+  `nav.py` and nowhere else (`icon\s*=\s*["']:material/` scan).
+- No emoji anywhere in the application source, headings or navigation.
+
+### Styles — `tests/test_ui_styles.py`
+- Every text/background token pair meets WCAG AA (4.5:1); the uploader border and
+  the illustration outline meet the 3:1 non-text threshold.
+- Uploader regression guard: the surface is white both in `.streamlit/config.toml`
+  (`secondaryBackgroundColor`, the token Streamlit actually paints the dropzone
+  with) and in the dropzone rule, and the label, instructions and browse-button
+  colours are each asserted against white rather than against the surface as a
+  whole.
+- The marking colour is never a surface: any rule that sets a background to
+  `--jd-mark` must be the primary action or its hover state, and the neutral pieces
+  (plate, caption, readout, note, section, flow) are asserted to contain no marking
+  colour at all. Hover, focus-within and disabled uploader states must exist.
+- The marking colour is asserted to be numerically distant from every colour the
+  detector draws with, so a reader cannot confuse the page accent with a box.
+- The type scale is exactly the nine declared steps, the spacing scale is the
+  declared 4–96 px set, and the only radius in the stylesheet is 2px.
+- Effects are banned by test: no gradient, filter, backdrop-filter, text-shadow,
+  keyframes, transform or transition, and the only `box-shadow` allowed is the focus
+  ring.
+- No surface token may carry a colour cast (the reported defect was a green one).
+- Every `data-testid` in the stylesheet is asserted against the installed Streamlit
+  bundle, so a Streamlit upgrade that renames a hook fails the suite instead of
+  silently dropping styles.
+- The root cause of the reported green-surface defect is pinned to the installed
+  bundle: the dropzone `<section>` uses `theme.colors.secondaryBg` and its
+  instructions use the faded grey token. If Streamlit changes either, the test fails
+  rather than the fix silently lapsing.
+- `.streamlit/config.toml` colours must match the design tokens, including the themed
+  graphite rail; the active destination is asserted to be *marked* with ochre rather
+  than filled with it.
+- Rail text and secondary rail text clear WCAG AA against the rail, and the rail is the
+  only dark surface.
+- Corners use the two-step radius scale (8px cards, 6px controls) and the type scale is
+  exactly seven steps.
+- The landing specimen is drawn from palette tokens and its outline clears the 3:1
+  non-text threshold.
+- Phase 5 UI behaviour is covered by `AppTest`: uploading on Home stages an image and
+  runs nothing; changing a threshold never calls the model; *Analyse image* is the only
+  path to inference; results render as measured tiles, one row per detection, with
+  timings taken from `DetectionResult.inference_ms` and a measured total.
+- Home is asserted to have exactly one bordered surface in source, no illustration, no
+  image before an analysis exists, and no fixed pixel widths; its columns stack in source
+  order so the uploader precedes session information on narrow screens.
+- The last-result preview is asserted to show only real data (filename, count, measured
+  total, annotated output) and to restore the image bytes and the thresholds that
+  produced it when reopened.
+- Every `icon=` in the pages must be a well-formed `:material/…:` symbol, so a second icon
+  family cannot creep in.
+
+### API contract — `tests/test_api_*.py`
+- `/v1/health` reports `degraded` with no weights and `ok` with them, and never
+  loads weights to answer.
+- `/v1/model` states the model's limitations, reports `labels_source` honestly,
+  returns recorded metrics verbatim and withholds invalid ones.
+- Problem documents are asserted for 404, 405, 422, 500 and 503: stable `type`,
+  `request_id`, no paths, no internals, no stack traces.
+- Every response is `no-store` with a request id; `/docs` is never available in
+  production; CORS is closed unless origins are allowlisted.
+- The API process is asserted (in a subprocess) to import no Streamlit.
+
+### Detection endpoint — `tests/test_api_detect*.py`, `tests/test_api_rate_limit.py`
+- **Parity:** the same fixture goes through `POST /v1/detect` and through
+  `analyse_image` directly, with independent detectors; label, confidence, box,
+  count, thresholds and analysed dimensions must match exactly, including the
+  zero-detection case and a downscaled image. `box_norm` is asserted to be the
+  pixel box divided by the analysed extent — derived, never a second measurement.
+- **Validation:** an 8 MB body is rejected from `Content-Length` before parsing;
+  a streamed body over 25 MB is rejected while uploading; HEIC/GIF/TIFF are
+  `415` whatever the filename claims; a 50 MP image is `413` before decode;
+  truncated and empty files are `422`.
+- **Unavailable model:** no weights, or weights that fail to load, produce `503`
+  with no detections, no confidences, no paths — and no fake "0 detections".
+- **Rate limiting:** the sliding window, per-key isolation, refill after the
+  window, `429` problem document with `Retry-After`, and `RateLimit-Scope:
+  instance` on success. A documentation test asserts `docs/API.md` describes the
+  limit as per instance and names the edge dependency, so the docs cannot drift
+  into claiming global protection.
+- **No leakage:** responses and errors contain no `best.pt`, `models.json`,
+  `torch` or `ultralytics` strings.
+
+### Web app — `web/tests/*.test.tsx` (Vitest + Testing Library)
+
+Run with `cd web && npm test`; typecheck with `npm run typecheck`; build with
+`npm run build`.
+
+- **Image selection** — a supported file is handed on; unsupported types,
+  oversized files and empty files are refused before anything is sent; the
+  refusal clears on the next valid choice; drop and the file input behave the same.
+- **Explicit analysis only** — staging an image calls nothing; changing a
+  threshold calls nothing; the button is disabled with no image; clicking sends
+  exactly one multipart request with the current thresholds and annotation flag.
+- **Results** — count, per-detection confidences, model inference, server total
+  and the browser round trip are rendered from the response (never recomputed);
+  one overlay rectangle per detection; the annotated PNG renders from base64 and
+  downloads as `<name>-annotated.png`; detections download as `<name>-result.json`.
+- **Errors** — model unavailable, rate limited (with `Retry-After` seconds),
+  payload too large, unsupported type, unreadable image and network failure each
+  produce specific, actionable copy; a failed re-run keeps the previous result.
+- **Model availability** — analysis is blocked with an explanation when the model
+  is not loaded, and still allowed with a warning when the status cannot be read.
+- **Navigation** — four destinations with correct hrefs, one `aria-current`
+  section, nested routes resolving to their section, and a rail/top-bar swap at
+  the tablet breakpoint.
+- **Privacy and honesty guards** — no browser storage in `app/`, `components/`
+  or `lib/`; no marketing metrics or placeholder imagery in source; the 25 MB cap
+  matches the API; the required breakpoints exist in the stylesheet.
+
+### Web ↔ API contract — `tests/test_web_contract.py`
+
+- The captured fixtures in `web/tests/fixtures/` still match the published
+  OpenAPI schema at every level (response, model ref, image info, thresholds,
+  timings, each detection box).
+- `web/lib/limits.ts` keeps the API's 25 MB upload cap.
+- `docs/WEB.md` keeps documenting the 4.5 MB host limit and the direct transport,
+  so the verification cannot be quietly dropped.
 
 ### Repository hygiene — `tests/test_repo_hygiene.py`
 - `.gitignore` covers `*.pt`, `*.onnx`, `datasets/`, `runs/`, secrets.
@@ -89,8 +228,10 @@ in about two seconds.
 ## Current result
 
 ```
-144 passed
+298 passed
 ```
+
+Web: `61 passed` (8 files) via `cd web && npm test`.
 
 Test counts by module are reported in the pull request. UI tests are marked `ui` and
 model-dependent tests would be marked `slow` (none currently require a real model).

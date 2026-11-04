@@ -1,107 +1,179 @@
-"""Home page: introduction, purpose and navigation."""
+"""Home — the application entry point and default route.
+
+The page has one purpose: start an analysis. The native uploader is the dominant
+surface; choosing a file stages it and opens Detect, where the explicit *Analyse image*
+action lives. Nothing is inferred here.
+
+Beside it sits this session's real information — a compact summary and, once an analysis
+has actually run, the annotated output it produced, which reopens that exact result on
+Detect. A new session shows a sentence, not a fabricated preview. Beneath both, the
+workflow is one understated line rather than three competing columns.
+"""
 
 from __future__ import annotations
 
+from typing import Any
+
 import streamlit as st
 
-from app.components.model_sidebar import select_model
-from app.components.status import render_scope_warning
-from app.core.errors import RegistryError
-from app.core.runtime import get_registry
+from app.components.results import format_ms
+from app.components.workflow import latest_result, remember_pending, stage_existing_result
+from app.core import config
+from app.core.stats import get_runs, summarise
+from app.ui.components import card, flow_line, meta, page_header, panel, readout
+from app.ui.theme import inject_theme
 
-__all__ = ["render"]
+__all__ = ["render", "specimen_svg"]
+
+HOME_UPLOAD_KEY = "home_upload"
+
+#: Namespace Detect stores its analysis under; Home only ever reads it.
+DETECT_NAMESPACE = "detect_analysis"
+
+_PLATE_WIDTH = 320
+_PLATE_HEIGHT = 200
+
+
+def _page(key: str):
+    """Resolve a navigation page lazily (nav imports this module)."""
+    from app.ui.nav import page_for
+
+    return page_for(key)
+
+
+def _handoff() -> None:
+    """Callback: stage the chosen file for Detect and open it.
+
+    Runs before the page renders, so Detect receives the image already in place. It
+    stores bytes only — it never runs the model.
+    """
+    uploaded = st.session_state.get(HOME_UPLOAD_KEY)
+    if uploaded is None:
+        return
+    remember_pending(uploaded.getvalue(), uploaded.name)
+    st.switch_page(_page("detect"))
+
+
+def _open_last_result() -> None:
+    """Callback: reopen the stored analysis on Detect, unchanged."""
+    if stage_existing_result(DETECT_NAMESPACE):
+        st.switch_page(_page("detect"))
 
 
 def render() -> None:
-    st.title("JUDEtector")
-    st.markdown(
-        "**An AI-powered object-detection web application** for image and camera "
-        "snapshot analysis, built on a trained Ultralytics YOLO model."
+    inject_theme()
+
+    page_header(
+        "Analyse an image",
+        "Upload a photo or take a snapshot. Analysis starts only when you choose "
+        "Analyse image.",
     )
 
-    spec, model_error = select_model()
+    workspace, session = st.columns([7, 3], gap="large", wrap=True)
 
-    left, right = st.columns([3, 2])
-
-    with left:
-        st.subheader("What this application does")
-        st.markdown(
-            """
-Upload an image or take a camera snapshot, and JUDEtector runs a trained
-Ultralytics YOLO detector over it. You get the annotated image, the number of
-detections, and the confidence score for every detection.
-
-- **Detect** — upload an image, tune the confidence threshold, inspect boxes and scores.
-- **Camera** — capture a browser snapshot and analyse it with the same pipeline.
-- **Dashboard** — model details, recorded evaluation metrics and session statistics.
-- **About** — project background, dataset details, limitations and ethics.
-
-Nothing is analysed until you provide an image. When weights are unavailable the
-app says so and produces **no** detections rather than guessing.
-"""
-        )
-
-        st.subheader("How detection works here")
-        st.markdown(
-            """
-1. Your image is decoded to RGB and downscaled if it exceeds the size guard.
-2. It is passed to the active detector — an Ultralytics YOLO model loaded lazily
-   from configurable weights.
-3. Boxes, labels and confidence scores come straight from the model's output.
-   JUDEtector adds the drawing and the counts; it never adds detections.
-"""
-        )
-
-    with right:
-        st.subheader("Project")
-        st.markdown(
-            """
-**Student:** Senyo-Dzattah Judah Agbemavor
-**Student ID:** PUIT/23110016
-**Programme:** BSc Information Technology
-**Institution:** Pentecost University
-"""
-        )
-        st.subheader("Active model")
-        if model_error:
-            st.error(model_error)
-        elif spec is not None:
-            st.markdown(f"**{spec.display_name}**")
-            st.caption(f"id `{spec.id}` · task `{spec.task}`")
-            if spec.weights_present:
-                st.success("Weights found on disk", icon="✅")
-            else:
-                st.warning("Weights not connected yet", icon="⚠️")
-            st.caption(
-                "Class label(s): "
-                + (", ".join(f"`{label}`" for label in spec.declared_labels) or "unknown")
+    with workspace:
+        with card():
+            st.file_uploader(
+                "Image file",
+                type=list(config.SUPPORTED_IMAGE_TYPES),
+                key=HOME_UPLOAD_KEY,
+                on_change=_handoff,
+                label_visibility="collapsed",
             )
+        st.page_link(
+            _page("camera"),
+            label="Take a snapshot with the camera",
+            icon=":material/photo_camera:",
+        )
+        meta("Images are analysed in memory and never stored.")
 
-    if spec is not None:
-        st.divider()
-        render_scope_warning(spec)
+    with session:
+        _session_panel()
 
-    st.divider()
-    st.subheader("Registered models")
-    try:
-        registry = get_registry()
-    except RegistryError as exc:
-        st.error(f"Could not read the model registry: {exc}")
+    flow_line(["Choose an image", "Analyse", "Review and download"])
+
+
+def _session_panel() -> None:
+    """Session figures and the latest real result, or a meaningful empty state."""
+    runs = get_runs(st.session_state)
+    record = latest_result(DETECT_NAMESPACE)
+
+    with panel("This session"):
+        if not runs:
+            meta(
+                "No analyses yet. Counts and confidences appear here after your first "
+                "analysis."
+            )
+            return
+
+        summary = summarise(runs)
+        rows = [
+            ("Analyses", str(summary.total_runs)),
+            ("Detections", str(summary.total_faces)),
+        ]
+        if summary.mean_confidence is not None:
+            rows.append(("Mean confidence", f"{summary.mean_confidence:.1%}"))
+        readout(rows)
+
+        if record is not None:
+            _last_result(record)
+
+
+def _last_result(record: dict[str, Any]) -> None:
+    """The annotated output of the latest analysis: a real measurement, not a preview."""
+    outcome = record.get("outcome")
+    if outcome is None or not outcome.ok or outcome.result is None:
         return
+    result = outcome.result
+    processed = outcome.processed
+    filename = str(record.get("filename", "image"))
+    total = record.get("total_ms")
 
-    rows = [
-        {
-            "id": item.id,
-            "name": item.display_name,
-            "kind": item.kind,
-            "general purpose": "yes" if item.is_general_purpose else "no",
-            "weights": "found" if item.weights_present else "missing",
-            "enabled": "yes" if item.enabled else "no",
-        }
-        for item in registry.specs
-    ]
-    st.dataframe(rows, hide_index=True, width="stretch")
-    st.caption(
-        "Adding a model is a configuration change in `config/models.json` — the views "
-        "never reference a specific model id."
+    facts = [filename, f"{result.count} detection" + ("" if result.count == 1 else "s")]
+    if isinstance(total, (int, float)) and total > 0:
+        facts.append(format_ms(total))
+
+    if processed is not None:
+        st.image(
+            processed,
+            width="stretch",
+            alt=(
+                f"The annotated result for {filename}: "
+                f"{result.count} detection" + ("" if result.count == 1 else "s")
+            ),
+        )
+    meta(" · ".join(facts), mono=True)
+    st.button(
+        "Open this result",
+        icon=":material/open_in_new:",
+        on_click=_open_last_result,
+        help="Reopen this analysis on Detect",
+    )
+
+
+def specimen_svg(*, annotated: bool) -> str:
+    """The abstract specimen, drawn from palette tokens.
+
+    No longer used on Home — a drawn abstraction read as a placeholder in review. It is
+    kept because the palette-derived artwork is still asserted by the style suite, and
+    would be the honest basis for any future illustration.
+    """
+    from app.ui.theme import PALETTE
+
+    marking = (
+        f'<rect x="126" y="40" width="68" height="76" fill="none" '
+        f'stroke="{PALETTE["mark"]}" stroke-width="3"/>'
+        if annotated
+        else ""
+    )
+    return (
+        f'<svg viewBox="0 0 {_PLATE_WIDTH} {_PLATE_HEIGHT}" aria-hidden="true" '
+        f'focusable="false">'
+        f'<rect width="{_PLATE_WIDTH}" height="{_PLATE_HEIGHT}" '
+        f'fill="{PALETTE["art_canvas"]}"/>'
+        f'<circle cx="160" cy="76" r="28" fill="{PALETTE["art_shape"]}"/>'
+        f'<path d="M118 200c0-24 19-44 42-44s42 20 42 44Z" '
+        f'fill="{PALETTE["art_shape"]}"/>'
+        f"{marking}"
+        "</svg>"
     )

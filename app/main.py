@@ -1,10 +1,17 @@
-"""JUDEtector — Streamlit entry point.
+"""JUDEtector — application entry point.
 
 Run locally with:
 
     streamlit run app/main.py
 
-Navigation is declared here; each page is a `render()` callable in `app/views/`.
+The frame is a dark navigation rail around a light analysis canvas. Navigation is
+declared in `app/ui/nav.py`; each page is a `render()` callable in `app/views/`. End
+users see Home, Detect, Camera and Help. The developer page is hidden from the
+navigation and reachable only at `/developer`.
+
+The rail carries the wordmark, grouped destinations and one genuine model-state light —
+nothing else. There is no account, avatar or workspace switcher, because the
+application has no such concepts.
 """
 
 from __future__ import annotations
@@ -19,30 +26,50 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.components.model_sidebar import render_sidebar_footer  # noqa: E402
-from app.views import about, camera, dashboard, detect, home  # noqa: E402
+from app.ui.components import rail_status  # noqa: E402
+from app.ui.nav import build_pages  # noqa: E402
 
 __all__ = ["main"]
+
+LOGO_PATH = PROJECT_ROOT / "assets" / "logo.svg"
+MARK_PATH = PROJECT_ROOT / "assets" / "mark.svg"
+
+
+def _model_state() -> tuple[str, str]:
+    """(state, label) for the rail footer.
+
+    Reads the registry only: it never loads weights or runs inference, so the footer
+    can never imply a capability the application does not have. The label is two words,
+    because the rail is navigation, not a diagnostics panel.
+    """
+    from app.components.settings import current_model
+
+    spec, error = current_model()
+    if error or spec is None:
+        return "unavailable", "Model unavailable"
+    if spec.weights_present:
+        return "ready", "Model available"
+    return "unavailable", "Model unavailable"
 
 
 def main() -> None:
     st.set_page_config(
-        page_title="JUDEtector — AI Object Detection",
-        page_icon="🔎",
+        page_title="JUDEtector",
+        page_icon=str(MARK_PATH) if MARK_PATH.is_file() else None,
         layout="wide",
-        initial_sidebar_state="expanded",
+        initial_sidebar_state="auto",
     )
 
-    pages = [
-        st.Page(home.render, title="Home", icon="🏠", url_path="home", default=True),
-        st.Page(detect.render, title="Detect", icon="🖼️", url_path="detect"),
-        st.Page(camera.render, title="Camera", icon="📷", url_path="camera"),
-        st.Page(dashboard.render, title="Dashboard", icon="📊", url_path="dashboard"),
-        st.Page(about.render, title="About", icon="ℹ️", url_path="about"),
-    ]
+    if LOGO_PATH.is_file():
+        st.logo(str(LOGO_PATH), size="large", icon_image=str(MARK_PATH))
 
-    st.navigation(pages).run()
-    render_sidebar_footer()
+    page = st.navigation(build_pages())
+
+    with st.sidebar:
+        state, label = _model_state()
+        rail_status(label, state=state)
+
+    page.run()
 
 
 main()

@@ -1,6 +1,16 @@
 # Optional ML stack -- required only to run real inference against a trained model.
-# Kept separate from requirements.txt so the app + test suite can run without
-# downloading PyTorch, which is large.
+# Kept separate from requirements.txt so the API and the Streamlit app can start,
+# and the test suite can run, without downloading PyTorch.
+#
+# Sizes verified on PyPI 2026-11-04:
+#   torch 2.15.0 cp311 manylinux x86_64 wheel = 539.1 MB   <- this is why inference
+#                                                             runs in a container,
+#                                                             not in a Vercel function
+#   ultralytics 8.4.202 (pure Python)         = 1.4 MB
 ultralytics>=8.3
 torch>=2.0
 torchvision>=0.15
+
+# Deferred (Stage 4+): ONNX export of the same weights, served with
+# onnxruntime (23.8 MB wheel) after a parity test against this path passes.
+# onnxruntime==1.31.1

@@ -82,11 +82,11 @@ that name, not a guess.
 | `weights` | yes | Path to `.pt` (relative to repo root, or absolute) |
 | `enabled` | no | `false` hides the model from the selector (default `true`) |
 | `kind` | no | `subject_specific` or `general_purpose` |
-| `is_general_purpose` | no | Drives the honesty banner; `false` shows the scope warning |
+| `is_general_purpose` | no | `false` marks the model subject-specific in Help and the developer page |
 | `declared_labels` | no | Fallback labels, shown as *unverified* until the model loads |
-| `dataset` | no | Declared dataset facts for the Dashboard/About pages |
+| `dataset` | no | Declared dataset facts, shown on the developer page |
 | `provenance` | no | Free-form facts (dataset platform, training status, …) |
-| `metrics_file` | no | Evaluation record shown on the Dashboard |
+| `metrics_file` | no | Evaluation record shown verbatim on the developer page |
 
 Relative paths resolve against the repository root. Override the whole file with
 `JUDETECTOR_REGISTRY=/path/to/models.json`.
@@ -122,8 +122,8 @@ or a hosted API would all plug in the same way.
 ## Recording evaluation metrics
 
 See [`metrics/README.md`](../metrics/README.md). Short version: copy the numbers
-from your own run into `metrics/judah-face-v1.json` and the Dashboard shows them
-verbatim. Until then it explicitly reports that no metrics are recorded.
+from your own run into `metrics/judah-face-v1.json` and the developer page (`/developer`)
+shows them verbatim. Until then it explicitly reports that no metrics are recorded.
 
 ---
 

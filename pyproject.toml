@@ -6,6 +6,7 @@ addopts = "-ra --strict-markers"
 markers = [
     "slow: tests that require a real model or long-running inference",
     "ui: Streamlit AppTest based interface tests",
+    "api: FastAPI contract tests (no model weights required)",
 ]
 
 [tool.ruff]

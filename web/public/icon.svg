@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="JUDEtector">
+  <rect width="32" height="32" rx="6" fill="#1e2122"/>
+  <path d="M8 12V9.5A1.5 1.5 0 0 1 9.5 8H12" stroke="#c8963e" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M20 8h2.5A1.5 1.5 0 0 1 24 9.5V12" stroke="#c8963e" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M24 20v2.5A1.5 1.5 0 0 1 22.5 24H20" stroke="#c8963e" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M12 24H9.5A1.5 1.5 0 0 1 8 22.5V20" stroke="#c8963e" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M8 16h16" stroke="#f7f5f0" stroke-width="2" stroke-linecap="round"/>
+</svg>

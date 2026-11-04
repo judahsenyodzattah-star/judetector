@@ -1,0 +1,11 @@
+{
+  "status": "ok",
+  "service": "judetector-api",
+  "version": "0.1.0",
+  "uptime_s": 0.06,
+  "model": {
+    "id": "stub-model",
+    "available": true,
+    "loaded": true
+  }
+}
