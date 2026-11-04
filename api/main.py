@@ -1,8 +1,8 @@
 """FastAPI application factory for the JUDEtector inference service.
 
-Stage 0 exposes the service contract only: `/v1/health` and `/v1/model`.
-`/v1/detect` arrives in Stage 1 and reuses `app/components/pipeline.py`
-unchanged.
+Endpoints: `/v1/health`, `/v1/model`, and `/v1/detect` — the last one reuses
+`app/components/pipeline.py` unchanged, so the API cannot drift from the
+Streamlit prototype.
 
 Run locally:
 
@@ -21,8 +21,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import __version__
-from api.errors import install_error_handlers, install_http_middleware
-from api.routes import health, model
+from api.errors import install_body_size_guard, install_error_handlers, install_http_middleware
+from api.rate_limit import RateLimitMiddleware, build_limiter
+from api.routes import detect, health, model
 from api.settings import Settings
 
 __all__ = ["app", "create_app"]
@@ -55,9 +56,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = resolved_settings
     app.state.started_at = time.monotonic()
+    app.state.rate_limiter = build_limiter(resolved_settings)
 
     install_http_middleware(app)
+    install_body_size_guard(app)
     install_error_handlers(app)
+    # Added last of these three so it wraps them: the quota headers and the 429
+    # are produced even when the body guard or a route raises.
+    app.add_middleware(
+        RateLimitMiddleware,
+        settings=resolved_settings,
+        limiter=app.state.rate_limiter,
+    )
 
     if resolved_settings.allowed_origins:
         app.add_middleware(
@@ -72,6 +82,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(model.router)
+    app.include_router(detect.router)
     return app
 
 

@@ -32,8 +32,11 @@ def _client(registry_path: Path | None = None, **settings) -> TestClient:
 def test_openapi_publishes_exactly_the_contract(api_registry):
     schema = _client(api_registry()).get("/openapi.json").json()
     assert schema["info"]["title"] == "JUDEtector API"
-    assert set(schema["paths"]) == {"/v1/health", "/v1/model"}
-    assert {"HealthResponse", "ModelCard", "ModelStatus", "Problem"} <= set(
+    # Stage 1 adds the detection endpoint; the set stays exact so no accidental
+    # route can appear without this assertion changing.
+    assert set(schema["paths"]) == {"/v1/health", "/v1/model", "/v1/detect"}
+    assert set(schema["paths"]["/v1/detect"]) == {"post"}
+    assert {"HealthResponse", "ModelCard", "ModelStatus", "Problem", "DetectResponse"} <= set(
         schema["components"]["schemas"]
     )
 

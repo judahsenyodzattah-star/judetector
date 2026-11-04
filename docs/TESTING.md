@@ -163,6 +163,26 @@ in about two seconds.
   production; CORS is closed unless origins are allowlisted.
 - The API process is asserted (in a subprocess) to import no Streamlit.
 
+### Detection endpoint — `tests/test_api_detect*.py`, `tests/test_api_rate_limit.py`
+- **Parity:** the same fixture goes through `POST /v1/detect` and through
+  `analyse_image` directly, with independent detectors; label, confidence, box,
+  count, thresholds and analysed dimensions must match exactly, including the
+  zero-detection case and a downscaled image. `box_norm` is asserted to be the
+  pixel box divided by the analysed extent — derived, never a second measurement.
+- **Validation:** an 8 MB body is rejected from `Content-Length` before parsing;
+  a streamed body over 25 MB is rejected while uploading; HEIC/GIF/TIFF are
+  `415` whatever the filename claims; a 50 MP image is `413` before decode;
+  truncated and empty files are `422`.
+- **Unavailable model:** no weights, or weights that fail to load, produce `503`
+  with no detections, no confidences, no paths — and no fake "0 detections".
+- **Rate limiting:** the sliding window, per-key isolation, refill after the
+  window, `429` problem document with `Retry-After`, and `RateLimit-Scope:
+  instance` on success. A documentation test asserts `docs/API.md` describes the
+  limit as per instance and names the edge dependency, so the docs cannot drift
+  into claiming global protection.
+- **No leakage:** responses and errors contain no `best.pt`, `models.json`,
+  `torch` or `ultralytics` strings.
+
 ### Repository hygiene — `tests/test_repo_hygiene.py`
 - `.gitignore` covers `*.pt`, `*.onnx`, `datasets/`, `runs/`, secrets.
 - No weights files and no dataset directories exist in the working tree.
@@ -172,7 +192,7 @@ in about two seconds.
 ## Current result
 
 ```
-239 passed
+279 passed
 ```
 
 Test counts by module are reported in the pull request. UI tests are marked `ui` and

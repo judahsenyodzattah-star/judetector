@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from api.routes import health, model
+from api.routes import detect, health, model
 
-__all__ = ["health", "model"]
+__all__ = ["detect", "health", "model"]

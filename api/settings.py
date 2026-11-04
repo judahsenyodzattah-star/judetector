@@ -10,6 +10,11 @@ in CI and on Cloud Run without edits:
     JUDETECTOR_REGISTRY        path to models.json
     JUDETECTOR_CORS_ORIGINS    comma-separated allowlist
     JUDETECTOR_MAX_UPLOAD_MB   upload cap in megabytes
+    JUDETECTOR_MAX_PIXELS      decoded pixel budget per image
+    JUDETECTOR_MAX_ANNOTATED_MB  cap for the inline annotated PNG
+    JUDETECTOR_RATE_LIMIT_PER_MINUTE  per-instance requests per minute
+    JUDETECTOR_RATE_LIMIT_BACKEND     memory (per instance) | none
+    JUDETECTOR_TRUST_PROXY     honour the first X-Forwarded-For entry
 """
 
 from __future__ import annotations
@@ -28,6 +33,13 @@ def _csv(name: str) -> tuple[str, ...]:
     if not raw:
         return ()
     return tuple(part.strip() for part in raw.split(",") if part.strip())
+
+
+def _bool_env(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "on"}
 
 
 def _int_env(name: str, default: int) -> int:
@@ -53,6 +65,23 @@ class Settings:
     allowed_origins: tuple[str, ...] = ()
     max_upload_mb: int = config.MAX_UPLOAD_MB
     max_image_dimension: int = config.MAX_IMAGE_DIMENSION
+    max_pixels: int = 40_000_000
+    max_annotated_bytes: int = 6 * 1024 * 1024
+    rate_limit_per_minute: int = 30
+    rate_limit_backend: str = "memory"
+    trust_proxy: bool = False
+
+    #: Multipart overhead allowed on top of the file cap before the body guard
+    #: rejects a request without reading it.
+    multipart_overhead_bytes: int = 256 * 1024
+
+    @property
+    def max_upload_bytes(self) -> int:
+        return self.max_upload_mb * 1024 * 1024
+
+    @property
+    def max_request_bytes(self) -> int:
+        return self.max_upload_bytes + self.multipart_overhead_bytes
 
     def __post_init__(self) -> None:
         # Interactive docs are a development affordance. Production never gets
@@ -73,4 +102,13 @@ class Settings:
             max_image_dimension=_int_env(
                 "JUDETECTOR_MAX_IMAGE_DIMENSION", config.MAX_IMAGE_DIMENSION
             ),
+            max_pixels=_int_env("JUDETECTOR_MAX_PIXELS", 40_000_000),
+            max_annotated_bytes=_int_env(
+                "JUDETECTOR_MAX_ANNOTATED_MB", 6
+            )
+            * 1024
+            * 1024,
+            rate_limit_per_minute=_int_env("JUDETECTOR_RATE_LIMIT_PER_MINUTE", 30),
+            rate_limit_backend=(os.environ.get("JUDETECTOR_RATE_LIMIT_BACKEND", "memory").strip() or "memory"),
+            trust_proxy=_bool_env("JUDETECTOR_TRUST_PROXY", False),
         )

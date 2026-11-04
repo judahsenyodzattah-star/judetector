@@ -35,12 +35,21 @@ _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{8,64}$")
 class ProblemError(Exception):
     """Raise anywhere in a route to produce a problem document."""
 
-    def __init__(self, status: int, type_: str, title: str, detail: str) -> None:
+    def __init__(
+        self,
+        status: int,
+        type_: str,
+        title: str,
+        detail: str,
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         super().__init__(title)
         self.status = status
         self.type = type_
         self.title = title
         self.detail = detail
+        self.headers = headers or {}
 
 
 def request_id_of(request: Request) -> str:
@@ -60,19 +69,55 @@ def problem_response(
     type_: str,
     title: str,
     detail: str,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
+    request_id = request_id_of(request)
     body = Problem(
         type=type_,
         title=title,
         status=status,
         detail=detail,
-        request_id=request_id_of(request),
+        request_id=request_id,
     )
+    merged = {
+        "X-Request-Id": request_id,
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+    }
+    if headers:
+        merged.update(headers)
     return JSONResponse(
         status_code=status,
         content=body.model_dump(),
         media_type=PROBLEM_MEDIA_TYPE,
+        headers=merged,
     )
+
+
+def install_body_size_guard(app: FastAPI) -> None:
+    """Reject oversized bodies from `Content-Length`, before they are read.
+
+    The per-upload cap is also enforced while streaming; this guard simply stops a
+    large request at the edge of the process instead of buffering it first.
+    """
+    settings = app.state.settings
+
+    @app.middleware("http")
+    async def _body_size_guard(request: Request, call_next):
+        if request.method in {"POST", "PUT", "PATCH"}:
+            raw = request.headers.get("content-length", "")
+            if raw.isdigit() and int(raw) > settings.max_request_bytes:
+                return problem_response(
+                    request,
+                    status=413,
+                    type_="payload_too_large",
+                    title="Request is too large",
+                    detail=(
+                        f"Requests must be at most {settings.max_upload_mb} MB plus "
+                        "multipart overhead."
+                    ),
+                )
+        return await call_next(request)
 
 
 def install_http_middleware(app: FastAPI) -> None:
@@ -95,7 +140,12 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ProblemError)
     async def _problem(request: Request, exc: ProblemError) -> JSONResponse:
         return problem_response(
-            request, status=exc.status, type_=exc.type, title=exc.title, detail=exc.detail
+            request,
+            status=exc.status,
+            type_=exc.type,
+            title=exc.title,
+            detail=exc.detail,
+            headers=exc.headers,
         )
 
     @app.exception_handler(StarletteHTTPException)

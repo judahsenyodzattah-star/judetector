@@ -92,7 +92,7 @@ Full procedure and troubleshooting: [`docs/MODEL_INTEGRATION.md`](docs/MODEL_INT
 
 ---
 
-## Inference API (Stage 0)
+## Inference API
 
 A FastAPI service wraps the same detection engine so a web client — and later a
 mobile client — can run identical detection:
@@ -107,11 +107,28 @@ curl -s localhost:8000/v1/health
   exist; `degraded` otherwise).
 - `GET /v1/model` — the public model card: kind, labels and their source,
   limitations, and recorded metrics verbatim or `null`.
-- `POST /v1/detect` — **Stage 1**, with upload validation, rate limiting and the
-  same explicit-analysis rule as the prototype.
+- `POST /v1/detect` — one image in, detections out: pixel **and** normalised
+  boxes, per-detection confidences, thresholds, model info, measured timings and
+  the annotated PNG inline as base64. 25 MB upload cap, format and pixel-budget
+  validation, RFC 9457 problems, and a per-instance rate limiter.
+
+```bash
+curl -s -X POST localhost:8000/v1/detect -F file=@photo.jpg | python -m json.tool
+```
 
 The API imports `app/core` and `app/components/pipeline.py` unchanged; it never
-re-implements detection and never fabricates output. Container:
+re-implements detection and never fabricates output. Parity is enforced by tests
+that run the same fixture through the endpoint and through `analyse_image`
+directly and compare every number.
+
+**Rate limiting is per instance.** Cloud Run may run several instances, so the
+built-in 30 requests/minute is a per-process shield, not a global quota; global
+protection needs an edge limiter (Cloud Armor, API Gateway, Cloudflare) or a
+shared counter store. [`docs/API.md`](docs/API.md) says so in the contract rather
+than implying otherwise, and `RateLimit-Scope` reports what is actually
+enforced.
+
+Container:
 
 ```bash
 docker build -t judetector-api .

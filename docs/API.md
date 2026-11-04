@@ -4,14 +4,15 @@ FastAPI service over the **unchanged** detection engine (`app/core`,
 `app/components/pipeline.py`). It exists so a web client, and later a mobile
 client, can run the same detection the Streamlit prototype runs.
 
-**Stage 0 status:** service contract only — `GET /v1/health` and `GET /v1/model`.
-`POST /v1/detect` arrives in Stage 1, behind upload validation, rate limiting and
-the same explicit-action rule the prototype uses.
+**Stage 1 status:** `GET /v1/health`, `GET /v1/model` and `POST /v1/detect`.
+`/v1/detect` runs `analyse_image` untouched, behind upload validation, a
+per-instance rate limiter and the same explicit-action rule the prototype uses.
 
 ## Run it
 
 ```bash
 pip install -r requirements-dev.txt      # app + API + tests
+pip install -r requirements-model.txt    # torch + ultralytics (only for real inference)
 uvicorn api.main:app --reload --port 8000
 curl -s localhost:8000/v1/health | python -m json.tool
 ```
@@ -38,8 +39,13 @@ never a fabricated result.
 | `JUDETECTOR_REGISTRY` | `config/models.json` | model registry path |
 | `JUDETECTOR_MODEL_PATH` | — | absolute weights override for the default model |
 | `JUDETECTOR_CORS_ORIGINS` | *(empty)* | comma-separated origin allowlist; empty means no cross-origin access |
-| `JUDETECTOR_MAX_UPLOAD_MB` | `25` | upload cap (enforced from Stage 1) |
+| `JUDETECTOR_MAX_UPLOAD_MB` | `25` | upload cap, enforced while streaming |
 | `JUDETECTOR_MAX_IMAGE_DIMENSION` | `4000` | longest side after downscale |
+| `JUDETECTOR_MAX_PIXELS` | `40000000` | decoded-pixel budget, checked before decoding |
+| `JUDETECTOR_MAX_ANNOTATED_BYTES` | `6291456` | annotated PNG cap (6 MiB) before it is returned |
+| `JUDETECTOR_RATE_LIMIT_PER_MINUTE` | `30` | requests per client per minute, per instance |
+| `JUDETECTOR_RATE_LIMIT_BACKEND` | `memory` | `memory` or `none` (edge-enforced) |
+| `JUDETECTOR_TRUST_PROXY` | `false` | trust `X-Forwarded-For` for the client key |
 | `PORT` | `8080` | bind port in the container |
 
 ## `GET /v1/health`
@@ -81,6 +87,118 @@ something it is not.
 
 `503 model_unavailable` when no model is configured.
 
+## `POST /v1/detect`
+
+`multipart/form-data`, one image, explicit per request — nothing runs in the
+background and nothing is inferred from a webcam or a stream.
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `file` | file | required | JPG, PNG, WEBP or BMP |
+| `confidence` | float | `0.25` | `0.01`–`0.99` |
+| `iou` | float | `0.45` | `0.10`–`0.95` |
+| `include_annotated` | bool | `true` | inline base64 annotated PNG |
+
+```bash
+curl -s -X POST localhost:8000/v1/detect \
+  -F file=@photo.jpg -F confidence=0.25 -F iou=0.45 \
+  | python -m json.tool
+```
+
+Response (`200`):
+
+```json
+{
+  "request_id": "9f2c…",
+  "model": {"id":"judah-face-v1","display_name":"…","kind":"subject_specific",
+            "labels":["judah"],"labels_source":"declared"},
+  "image": {"width":4000,"height":3000,"source_width":6000,"source_height":4500,
+            "downscaled":true,"bytes":1843200,"megapixels":12.0},
+  "thresholds": {"confidence":0.25,"iou":0.45},
+  "count": 2,
+  "detections": [
+    {"label":"judah","confidence":0.9134,
+     "box":{"x1":812.0,"y1":404.5,"x2":1673.2,"y2":1402.9},
+     "box_norm":{"x1":0.203,"y1":0.1348,"x2":0.4183,"y2":0.4676}}
+  ],
+  "timing": {"inference_ms":41.2,"total_ms":268.7},
+  "annotated": {"mime":"image/png","encoding":"base64","width":4000,"height":3000,
+                "bytes":98213,"data":"iVBORw0KGgo…"},
+  "warnings": []
+}
+```
+
+- **Boxes** are pixels in the *analysed* image (`image.width` × `image.height`,
+  after downscale) — never the original. `image.source_*` carries the original
+  size so a client can scale back.
+- **`box_norm`** is the same box divided by the analysed extent, rounded to six
+  decimals and clamped to `[0, 1]`. It is derived, not a second measurement.
+- **`confidence`** per detection is the detector's score for that box, rounded
+  to four decimals. There is no aggregate "accuracy" anywhere.
+- **`count`** equals `len(detections)`; it is never a separate estimate.
+- **`timing.inference_ms`** is the figure the pipeline measured around the
+  model call. **`timing.total_ms`** is measured by the API around the whole
+  request (decode, inference, annotation). Neither is estimated.
+- **`annotated`** is the same PNG the prototype draws, returned inline as
+  base64. If it would exceed `JUDETECTOR_MAX_ANNOTATED_BYTES`, the field is
+  `null` and a warning explains why — detections are never dropped for it.
+  Send `include_annotated=false` when only numbers are needed.
+- **`warnings`** carries plain-language notes (for example an oversized
+  annotation, or a downscaled image). It is empty rather than padded.
+
+### Validation, in order
+
+1. `Content-Length` above the upload cap plus multipart overhead → `413`
+   before any parsing.
+2. Body streamed in 64 KiB chunks; crossing 25 MB → `413` and the upload is
+   abandoned.
+3. The detected PIL format must be JPG/PNG/WEBP/BMP → `415`. The filename and
+   the client-sent content type are ignored.
+4. `width × height` above 40 MP → `413` from the header probe, before pixels
+   are decoded.
+5. Corrupt, truncated or empty image → `422 invalid_image`.
+6. Then decode, downscale to 4000 px on the longest side, and run the pipeline.
+
+`503 model_unavailable` is returned when weights are absent or the model cannot
+load, and it contains no detections, confidences or paths — a client must not be
+able to mistake "unavailable" for "nothing found".
+
+## Rate limiting
+
+Defaults: 30 requests per minute, per client IP.
+
+**The built-in limiter is per instance.** `InProcessRateLimiter` keeps a sliding
+window in this process's memory. Cloud Run may run several instances and may
+start new ones at any time, so with more than one instance a client's effective
+quota is *N × 30* and counters reset when instances recycle. It is a coarse
+shield against a single runaway client, not global protection.
+
+Global protection needs a dependency this service does not provide:
+
+- an **edge** limiter in front of the service — Cloud Armor rate-limiting rules,
+  API Gateway quotas, or a CDN/WAF such as Cloudflare; or
+- a shared counter store such as Redis or Memorystore, which would be a new
+  dependency and a new failure mode.
+
+Set `JUDETECTOR_RATE_LIMIT_BACKEND=none` when the edge already enforces a quota,
+so the responses are not throttled twice. The scope is reported honestly on
+every response:
+
+```
+RateLimit-Limit: 30
+RateLimit-Remaining: 28
+RateLimit-Reset: 41
+RateLimit-Scope: instance      # "none" when the built-in limiter is disabled
+```
+
+On `429` the body is a problem document and `Retry-After` gives the seconds
+until the window frees. Health and model-card requests are never limited, so
+orchestrators and monitors are unaffected.
+
+The client key is the socket peer address. `X-Forwarded-For` is honoured **only**
+when `JUDETECTOR_TRUST_PROXY=true`; trusting it by default would let any caller
+pick their own key and evade the limit.
+
 ## Errors
 
 Every error is `application/problem+json`:
@@ -94,13 +212,13 @@ Every error is `application/problem+json`:
 |---|---|---|
 | 404 | `not_found` | no such route |
 | 405 | `method_not_allowed` | wrong method |
-| 413 | `payload_too_large` | upload above the cap *(Stage 1)* |
-| 415 | `unsupported_media_type` | not JPG/PNG/WEBP/BMP *(Stage 1)* |
+| 413 | `payload_too_large` | upload above the cap, or above the pixel budget |
+| 415 | `unsupported_media_type` | not JPG/PNG/WEBP/BMP |
 | 422 | `invalid_request` | invalid parameter |
-| 422 | `invalid_image` | file could not be decoded *(Stage 1)* |
-| 429 | `rate_limited` | client quota exceeded *(Stage 1)* |
+| 422 | `invalid_image` | file could not be decoded |
+| 429 | `rate_limited` | client quota exceeded, with `Retry-After` |
 | 500 | `internal_error` | unhandled failure, internals masked |
-| 500 | `inference_failed` | model raised during inference *(Stage 1)* |
+| 500 | `inference_failed` | model raised during inference, details masked |
 | 503 | `model_unavailable` | weights or ML stack missing |
 
 Details never contain filesystem paths, dependency names, registry keys or
@@ -109,16 +227,19 @@ stack traces. Correlate with the server log using `request_id`.
 ## Response headers
 
 Every response carries `X-Request-Id` (echoed when the caller supplies a valid
-one), `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`. Stage 1
-adds `Server-Timing: inference;dur=…, total;dur=…` on `/v1/detect`.
+one), `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`.
+`/v1/detect` adds `Server-Timing: inference;dur=41.2, total;dur=268.7` and the
+`RateLimit-*` headers above.
 
 ## Privacy
 
-Images are decoded and analysed in memory. Nothing is written to disk, no
-request body is logged, and there is no history endpoint. `/v1/detect` will
-return the annotated PNG inline rather than storing it.
+Images are decoded, analysed and annotated in memory. Nothing is written to
+disk, no request body is logged, and there is no history endpoint. The annotated
+PNG is returned inline rather than stored.
 
-## Measured on this machine (no ML stack, no weights)
+## Measured on this machine
+
+Stage 0, no ML stack and no weights:
 
 | Metric | Value |
 |---|---|
@@ -127,6 +248,17 @@ return the annotated PNG inline rather than storing it.
 | `/v1/health` latency | p50 1.25 ms, p95 1.75 ms |
 | uvicorn RSS after boot | 48.8 MiB |
 
-Model-load time, inference latency and peak memory **cannot** be measured until
-`torch`, `ultralytics` and the author's weights are present; Stage 1 records them
-rather than estimating them.
+Stage 1 service overhead, in-process test client with a stub detector that
+reports 0.01 ms of inference — so these numbers are validation, annotation and
+HTTP work only:
+
+| Request | p50 | p95 | Response |
+|---|---|---|---|
+| 320 × 240 PNG, annotated | 11 ms | 12 ms | 4 KiB |
+| 4000 × 3000 PNG, annotated | 357 ms | 410 ms | 74 KiB |
+| 4000 × 3000 PNG, `include_annotated=false` | 118 ms | 122 ms | 1 KiB |
+
+Model-load time, real inference latency and peak memory **cannot** be measured
+until `torch`, `ultralytics` and the author's weights are present. The same stub
+records 0.01 ms, which is why the table above is labelled *overhead* and not
+*performance*. Real figures will be recorded, never estimated.
