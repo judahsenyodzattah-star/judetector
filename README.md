@@ -170,7 +170,10 @@ failing opaquely. No upload limit was reduced. CORS is not treated as security:
 the endpoint stays public, and the edge-limiter and alerting work that public
 exposure still needs is listed in [`docs/WEB.md`](docs/WEB.md#before-this-endpoint-is-exposed-publicly).
 
-Full notes: [`docs/WEB.md`](docs/WEB.md).
+Full notes: [`docs/WEB.md`](docs/WEB.md). Deployment plan, costs, abuse
+protection, the model-weight blocker, the acceptance checklist and rollback:
+[`docs/STAGE3_DEPLOYMENT_READINESS.md`](docs/STAGE3_DEPLOYMENT_READINESS.md) —
+prepared, not executed.
 
 ## Application sections
 
