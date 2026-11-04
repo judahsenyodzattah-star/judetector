@@ -76,7 +76,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_credentials=False,
             allow_methods=["GET", "POST", "OPTIONS"],
             allow_headers=["Content-Type", "X-Request-Id"],
-            expose_headers=["X-Request-Id", "Server-Timing"],
+            # The browser reads these to show measured timings and the real
+            # quota; without them a cross-origin client sees only the body.
+            expose_headers=[
+                "X-Request-Id",
+                "Server-Timing",
+                "RateLimit-Limit",
+                "RateLimit-Remaining",
+                "RateLimit-Reset",
+                "RateLimit-Scope",
+                "Retry-After",
+            ],
             max_age=600,
         )
 

@@ -1,0 +1,13 @@
+{
+  "id": "stub-model",
+  "display_name": "JUDEtector \u2014 stub model",
+  "kind": "subject_specific",
+  "task": "detect",
+  "labels": [
+    "judah"
+  ],
+  "labels_source": "model",
+  "available": true,
+  "limitations": "Single-subject detector trained on one person. It is not a validated general-purpose face detector and cannot identify anyone. Do not use it for surveillance or access decisions. Detection is not recognition.",
+  "metrics": null
+}

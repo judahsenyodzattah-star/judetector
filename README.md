@@ -138,6 +138,38 @@ docker run -p 8080:8080 -v /path/to/models:/models:ro \
 
 Full contract and error taxonomy: [`docs/API.md`](docs/API.md).
 
+## Web app (Next.js)
+
+`web/` is the React interface for the same engine: App Router, TypeScript, no UI
+framework dependency beyond React itself.
+
+```bash
+cd web && npm install && npm run dev     # http://localhost:3000
+cd web && npm test && npm run build
+```
+
+- **Home** — one dominant uploader, a compact session panel, the model's
+  limitations and its real availability. Choosing a file stages it; nothing is
+  analysed until you ask.
+- **Detect** — overlay drawn from the API's own boxes, confidence and IoU
+  thresholds, one explicit **Analyse image**, then counts, confidences, measured
+  timings, the service's annotated PNG (viewable and downloadable) and the
+  detections as JSON.
+- **Camera** — an honest empty state: live capture is the next stage, so the
+  page shows no simulated viewfinder.
+- **Help** — what the app does, what it refuses to do, how to read a result.
+
+**Upload transport — verified, not assumed.** Vercel Functions accept at most
+4.5 MB per request and cannot be raised, so a 25 MB image cannot be proxied
+through a Next.js Route Handler on Vercel. Cloud Run accepts the full 25 MB
+request. The app therefore reads health and the model card server-side and sends
+`/v1/detect` **directly** from the browser to the API (CORS) when
+`NEXT_PUBLIC_API_BASE_URL` is set; locally it uses the same-origin proxy, which
+refuses an over-limit body explicitly on Vercel instead of failing opaquely.
+No upload limit was reduced.
+
+Full notes: [`docs/WEB.md`](docs/WEB.md).
+
 ## Application sections
 
 The application opens on **Home**, an entry point built around one real control:

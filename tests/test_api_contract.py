@@ -117,3 +117,31 @@ def test_cors_does_not_allow_arbitrary_origins(api_registry):
     client = _client(api_registry(), allowed_origins=("https://example.test",))
     response = client.get("/v1/health", headers={"Origin": "https://evil.test"})
     assert response.headers.get("access-control-allow-origin") != "https://evil.test"
+
+
+def test_cors_exposes_the_headers_the_web_app_needs(api_registry):
+    """A cross-origin client must be able to read timings and the quota state."""
+    from api.main import create_app
+    from api.settings import Settings
+
+    client = TestClient(
+        create_app(
+            Settings(
+                registry_path=api_registry(weights=True),
+                environment="test",
+                allowed_origins=("https://judetector.example",),
+            )
+        ),
+        raise_server_exceptions=False,
+    )
+    response = client.post(
+        "/v1/detect",
+        files={"file": ("a.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+        headers={"origin": "https://judetector.example"},
+    )
+    exposed = {
+        header.strip().lower()
+        for header in response.headers.get("access-control-expose-headers", "").split(",")
+    }
+    assert response.headers["access-control-allow-origin"] == "https://judetector.example"
+    assert {"server-timing", "ratelimit-limit", "ratelimit-remaining", "retry-after"} <= exposed

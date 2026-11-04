@@ -46,6 +46,15 @@ dist/
 venv/
 env/
 
+# ---- Web (Next.js) ----
+web/node_modules/
+web/.next/
+web/out/
+web/coverage/
+web/.turbo/
+web/next-env.d.ts
+web/tsconfig.tsbuildinfo
+
 # ---- Testing / tooling ----
 .pytest_cache/
 .coverage

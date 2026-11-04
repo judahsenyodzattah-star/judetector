@@ -183,6 +183,42 @@ in about two seconds.
 - **No leakage:** responses and errors contain no `best.pt`, `models.json`,
   `torch` or `ultralytics` strings.
 
+### Web app — `web/tests/*.test.tsx` (Vitest + Testing Library)
+
+Run with `cd web && npm test`; typecheck with `npm run typecheck`; build with
+`npm run build`.
+
+- **Image selection** — a supported file is handed on; unsupported types,
+  oversized files and empty files are refused before anything is sent; the
+  refusal clears on the next valid choice; drop and the file input behave the same.
+- **Explicit analysis only** — staging an image calls nothing; changing a
+  threshold calls nothing; the button is disabled with no image; clicking sends
+  exactly one multipart request with the current thresholds and annotation flag.
+- **Results** — count, per-detection confidences, model inference, server total
+  and the browser round trip are rendered from the response (never recomputed);
+  one overlay rectangle per detection; the annotated PNG renders from base64 and
+  downloads as `<name>-annotated.png`; detections download as `<name>-result.json`.
+- **Errors** — model unavailable, rate limited (with `Retry-After` seconds),
+  payload too large, unsupported type, unreadable image and network failure each
+  produce specific, actionable copy; a failed re-run keeps the previous result.
+- **Model availability** — analysis is blocked with an explanation when the model
+  is not loaded, and still allowed with a warning when the status cannot be read.
+- **Navigation** — four destinations with correct hrefs, one `aria-current`
+  section, nested routes resolving to their section, and a rail/top-bar swap at
+  the tablet breakpoint.
+- **Privacy and honesty guards** — no browser storage in `app/`, `components/`
+  or `lib/`; no marketing metrics or placeholder imagery in source; the 25 MB cap
+  matches the API; the required breakpoints exist in the stylesheet.
+
+### Web ↔ API contract — `tests/test_web_contract.py`
+
+- The captured fixtures in `web/tests/fixtures/` still match the published
+  OpenAPI schema at every level (response, model ref, image info, thresholds,
+  timings, each detection box).
+- `web/lib/limits.ts` keeps the API's 25 MB upload cap.
+- `docs/WEB.md` keeps documenting the 4.5 MB host limit and the direct transport,
+  so the verification cannot be quietly dropped.
+
 ### Repository hygiene — `tests/test_repo_hygiene.py`
 - `.gitignore` covers `*.pt`, `*.onnx`, `datasets/`, `runs/`, secrets.
 - No weights files and no dataset directories exist in the working tree.
@@ -192,8 +228,10 @@ in about two seconds.
 ## Current result
 
 ```
-279 passed
+287 passed
 ```
+
+Web: `55 passed` (7 files) via `cd web && npm test`.
 
 Test counts by module are reported in the pull request. UI tests are marked `ui` and
 model-dependent tests would be marked `slow` (none currently require a real model).
