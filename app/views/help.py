@@ -24,7 +24,7 @@ def render() -> None:
             ("Analyse", "Press Analyse image. The image is processed and an annotated copy is returned."),
             (
                 "Review and download",
-                "Compare the annotated and original images, then download if you need it.",
+                "Check the marked image and each confidence, then download the PNG if you need it.",
             ),
         ]
     )
@@ -35,8 +35,10 @@ def render() -> None:
             "Each outline marks one detection.",
             "Confidence is how sure the model is about that detection. Higher is stronger.",
             "The detection count is how many matches passed your confidence threshold.",
-            "Advanced settings set that threshold, and how much overlap is allowed before "
-            "duplicate boxes are dropped.",
+            "Params sets that threshold, and how much overlap is allowed before duplicate "
+            "boxes are dropped. Changing them applies to your next analysis, not the last one.",
+            "Details lists the thresholds, the timing and the box coordinates behind a "
+            "result. JSON shows the same records exactly as the model produced them.",
         ]
     )
 

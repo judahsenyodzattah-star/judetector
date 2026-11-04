@@ -16,28 +16,33 @@ primaryColor = "#8A5A00"
 backgroundColor = "#F4F2ED"
 secondaryBackgroundColor = "#FFFFFF"
 textColor = "#16181A"
-borderColor = "#52585C"
-baseRadius = "2px"
-buttonRadius = "2px"
-baseFontSize = 15
+borderColor = "#D0CBC1"
+baseRadius = "8px"
+buttonRadius = "6px"
+baseFontSize = 14
 font = "sans serif"
 headingFont = "sans serif"
 codeFont = "monospace"
-codeBackgroundColor = "#EFECE4"
+codeBackgroundColor = "#F4F2ED"
 codeTextColor = "#16181A"
 grayColor = "#52585C"
 grayBackgroundColor = "#F4F2ED"
 grayTextColor = "#52585C"
 linkColor = "#8A5A00"
-linkUnderline = true
+linkUnderline = false
 showWidgetBorder = true
 dataframeBorderColor = "#D0CBC1"
 dataframeHeaderBackgroundColor = "#F4F2ED"
 dataframeHeaderTextColor = "#52585C"
-showSidebarBorder = true
-headingFontSizes = ["38px", "24px", "17px", "15px", "15px", "14px"]
+showSidebarBorder = false
+headingFontSizes = ["22px", "17px", "15px", "14px", "14px", "13px"]
 headingFontWeights = [600, 600, 600, 600, 600, 600]
 
+# The navigation rail is the one dark surface in the product: it frames the
+# workspace and keeps the canvas light.
 [theme.sidebar]
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F4F2ED"
+backgroundColor = "#1E2122"
+secondaryBackgroundColor = "#2A2E2F"
+textColor = "#EDEBE6"
+borderColor = "#33383A"
+primaryColor = "#8A5A00"

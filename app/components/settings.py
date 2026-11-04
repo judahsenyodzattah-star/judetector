@@ -82,6 +82,37 @@ def select_model() -> tuple[ModelSpec | None, str | None]:
     return by_id[chosen], None
 
 
+def parameters() -> tuple[float, float]:
+    """Detection thresholds behind one `Params` popover.
+
+    The controls are deliberately outside the primary workflow: they change what an
+    analysis *would* find, so they must be set before pressing *Analyse image* and can
+    never trigger inference themselves.
+    """
+    with st.popover("Params", icon=":material/tune:", help="Detection thresholds"):
+        st.markdown("**Detection thresholds**")
+        confidence = st.slider(
+            "Confidence threshold",
+            min_value=float(config.CONFIDENCE_RANGE[0]),
+            max_value=float(config.CONFIDENCE_RANGE[1]),
+            value=float(config.DEFAULT_CONFIDENCE),
+            step=0.01,
+            key="confidence_threshold",
+            help="Lower values surface weaker matches and raise the count, not the quality.",
+        )
+        iou = st.slider(
+            "Overlap threshold (IoU)",
+            min_value=float(config.IOU_RANGE[0]),
+            max_value=float(config.IOU_RANGE[1]),
+            value=float(config.DEFAULT_IOU),
+            step=0.05,
+            key="iou_threshold",
+            help="How much two boxes may overlap before the weaker one is dropped.",
+        )
+        st.caption("Applies to your next analysis.")
+    return float(confidence), float(iou)
+
+
 def advanced_settings() -> tuple[float, float]:
     """Collapsed confidence / IoU controls. Returns ``(confidence, iou)``."""
     with st.expander("Advanced settings", expanded=False):

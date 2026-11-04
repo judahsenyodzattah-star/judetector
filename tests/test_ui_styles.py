@@ -1,4 +1,4 @@
-"""Guards for the shared stylesheet — the proof-sheet design language.
+"""Guards for the shared stylesheet — the application design language.
 
 These are the failures that are invisible by reading CSS: dead Streamlit selectors,
 contrast regressions, off-scale type, a palette that drifts from the theme config,
@@ -41,6 +41,8 @@ def contrast(foreground: str, background: str) -> float:
 
 
 TEXT_PAIRS = [
+    ("rail text on the rail", "rail_text", "rail"),
+    ("rail secondary text on the rail", "rail_muted", "rail"),
     ("ink on mount", "ink", "mount"),
     ("ink on sheet", "ink", "sheet"),
     ("ink on artwork", "ink", "art_canvas"),
@@ -58,6 +60,23 @@ TEXT_PAIRS = [
 def test_text_pairs_meet_wcag_aa(name, fg, bg):
     ratio = contrast(PALETTE[fg], PALETTE[bg])
     assert ratio >= 4.5, f"{name} is {ratio:.2f}:1 (needs 4.5:1)"
+
+
+def test_the_rail_reads_as_the_only_dark_surface():
+    """The frame is dark, the workspace is light: that contrast is the hierarchy."""
+    for surface in ("sheet", "mount", "art_canvas"):
+        assert _luminance(PALETTE[surface]) > 0.8, f"{surface} is not a light surface"
+    assert _luminance(PALETTE["rail"]) < 0.05, "the rail is not dark"
+    assert contrast(PALETTE["rail_text"], PALETTE["rail"]) >= 7.0
+
+
+def test_the_active_destination_is_marked_not_filled():
+    """Ochre appears as a 2px rule on the active rail item, never as its background."""
+    body = _rule('[data-testid="stSidebarNavLink"][aria-current="page"]')
+    assert "border-left-color: var(--jd-mark)" in body
+    background = re.search(r"background:\s*([^;]+);", body)
+    assert background is not None, "the active item has no background declaration"
+    assert "var(--jd-mark)" not in background.group(1)
 
 
 def test_interactive_boundaries_clear_non_text_contrast():
@@ -190,13 +209,13 @@ def test_the_marking_colour_never_fills_a_surface():
 
 def test_neutral_pieces_contain_no_marking_colour():
     for selector in (
-        ".jd-plate",
-        ".jd-caption",
+        ".jd-card__head",
+        ".jd-dets",
+        ".jd-det",
         ".jd-readout",
         ".jd-note",
         ".jd-empty",
-        ".jd-section",
-        ".jd-flow",
+        ".jd-specimen__art",
     ):
         assert "--jd-mark" not in _rule(selector), f"{selector} should stay neutral"
 
@@ -214,8 +233,8 @@ def test_the_interface_accent_is_not_one_of_the_models_box_colours():
 # --------------------------------------------------------------------------
 # Type, spacing, radii
 # --------------------------------------------------------------------------
-# Seven text steps plus the display headline and its small-screen size.
-TYPE_SCALE = {0.72, 0.78, 0.84, 0.88, 0.94, 1.06, 1.5, 2.0, 2.4}
+# Seven text steps: label, data, small, body, card title, section, page title.
+TYPE_SCALE = {0.72, 0.78, 0.84, 0.88, 0.94, 1.06, 1.375}
 
 
 def test_type_scale_is_a_fixed_set_of_steps():
@@ -224,21 +243,28 @@ def test_type_scale_is_a_fixed_set_of_steps():
 
 
 def test_spacing_scale_is_the_declared_one():
-    expected = ["0.25", "0.5", "0.75", "1", "1.5", "2", "3", "4", "6"]
+    expected = ["0.25", "0.5", "0.75", "1", "1.5", "2", "3"]
     found = [
         re.search(rf"--jd-{index}:\s*([\d.]+)rem;", _CSS).group(1)
-        for index in range(1, 10)
+        for index in range(1, 8)
     ]
     assert found == expected
 
 
-def test_corners_are_square_throughout():
-    """A printed sheet, not a component library: one radius, 2px."""
-    assert "--jd-radius: 2px" in _CSS
+def test_corners_use_the_two_step_radius_scale():
+    """8px for cards, 6px for controls; circles and code are the only exceptions."""
+    assert "--jd-radius: 8px" in _CSS
+    assert "--jd-radius-sm: 6px" in _CSS
     radii = set(re.findall(r"border-radius:\s*([^;]+);", _CSS_RULES))
-    assert radii <= {"var(--jd-radius)", "var(--jd-radius) !important", "0"}, (
-        f"stray radii: {radii}"
-    )
+    allowed = {
+        "var(--jd-radius)",
+        "var(--jd-radius) !important",
+        "var(--jd-radius-sm)",
+        "var(--jd-radius-sm) !important",
+        "0",
+        "50%",
+    }
+    assert radii <= allowed, f"stray radii: {radii - allowed}"
 
 
 def test_paragraph_classes_outrank_the_global_text_rule():
@@ -322,19 +348,24 @@ def test_streamlit_theme_config_matches_the_design_tokens():
         "backgroundColor": PALETTE["sheet"],
         "secondaryBackgroundColor": PALETTE["mount"],
         "textColor": PALETTE["ink"],
-        "borderColor": PALETTE["ink_secondary"],
-        "baseRadius": "2px",
-        "buttonRadius": "2px",
-        "baseFontSize": 15,
+        "borderColor": PALETTE["rule"],
+        "baseRadius": "8px",
+        "buttonRadius": "6px",
+        "baseFontSize": 14,
     }
     for key, value in expected.items():
         rendered = f'"{value}"' if isinstance(value, str) else str(value)
         assert f"{key} = {rendered}" in config_text, f"{key} drifted from the palette"
 
+    # The rail is themed natively, not painted over Streamlit's internals.
+    sidebar_block = config_text.split("[theme.sidebar]", 1)[1]
+    assert f'backgroundColor = "{PALETTE["rail"]}"' in sidebar_block
+    assert f'textColor = "{PALETTE["rail_text"]}"' in sidebar_block
+
 
 def test_no_surface_token_carries_a_colour_cast():
     """The reported defect was a green surface behind grey text; surfaces stay neutral."""
-    for token in ("sheet", "mount", "art_canvas", "art_shape"):
+    for token in ("sheet", "mount", "art_canvas", "art_shape", "rail", "rail_text", "rail_muted"):
         value = PALETTE[token].lstrip("#")
         red, green, blue = (int(value[i : i + 2], 16) for i in (0, 2, 4))
         assert max(red, green, blue) - min(red, green, blue) <= 24, f"{token} is tinted"

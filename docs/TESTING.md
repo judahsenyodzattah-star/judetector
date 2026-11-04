@@ -130,9 +130,19 @@ in about two seconds.
   bundle: the dropzone `<section>` uses `theme.colors.secondaryBg` and its
   instructions use the faded grey token. If Streamlit changes either, the test fails
   rather than the fix silently lapsing.
-- `.streamlit/config.toml` colours must match the design tokens.
-- The landing illustration is drawn from palette tokens and its outline clears the
-  3:1 non-text threshold.
+- `.streamlit/config.toml` colours must match the design tokens, including the themed
+  graphite rail; the active destination is asserted to be *marked* with ochre rather
+  than filled with it.
+- Rail text and secondary rail text clear WCAG AA against the rail, and the rail is the
+  only dark surface.
+- Corners use the two-step radius scale (8px cards, 6px controls) and the type scale is
+  exactly seven steps.
+- The landing specimen is drawn from palette tokens and its outline clears the 3:1
+  non-text threshold.
+- Phase 5 UI behaviour is covered by `AppTest`: uploading on Home stages an image and
+  runs nothing; changing a threshold never calls the model; *Analyse image* is the only
+  path to inference; results render as measured tiles, one row per detection, with
+  timings taken from `DetectionResult.inference_ms` and a measured total.
 
 ### Repository hygiene — `tests/test_repo_hygiene.py`
 - `.gitignore` covers `*.pt`, `*.onnx`, `datasets/`, `runs/`, secrets.
@@ -143,7 +153,7 @@ in about two seconds.
 ## Current result
 
 ```
-202 passed
+207 passed
 ```
 
 Test counts by module are reported in the pull request. UI tests are marked `ui` and

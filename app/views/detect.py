@@ -1,27 +1,51 @@
-"""Detect — the primary workflow: upload, analyse, review, download.
+"""Detect — the primary workspace: choose → analyse → review → download.
 
-The image is the largest object on the page. It is mounted like a print, captioned
-with real facts about the file (name, frame, size), and the controls sit beside it
-rather than above it. Nothing technical appears here; if analysis cannot run, the
-page says so in one plain sentence and the cause goes to the developer page.
+Two panels are always present. The image and its controls sit on the left; the result
+sits on the right, so the outcome appears beside the thing that produced it instead of
+below a long scroll. Analysis is explicit: only *Analyse image* runs the model.
+
+Nothing technical appears here. If analysis cannot run, the page says so in one plain
+sentence and the cause goes to the developer page.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 import streamlit as st
 
-from app.components.settings import advanced_settings, current_model
+from app.components.results import format_ms, render_result_panel
+from app.components.settings import current_model, parameters
 from app.components.workflow import (
     UNAVAILABLE_MESSAGE,
     UNREADABLE_MESSAGE,
-    analysis_workspace,
+    analyse_controls,
+    clear_pending,
     decode_image,
+    image_facts,
+    pending_image,
 )
 from app.core import config
-from app.ui.components import caption_strip, meta, note, page_header
+from app.ui.components import card, meta, note, page_header
 from app.ui.theme import inject_theme
 
 __all__ = ["render"]
+
+NAMESPACE = "detect_analysis"
+UPLOAD_KEY = "detect_upload"
+
+
+def _page(key: str):
+    """Resolve a navigation page lazily (nav imports this module)."""
+    from app.ui.nav import page_for
+
+    return page_for(key)
+
+
+def _clear_source() -> None:
+    """Callback: drop both the staged handoff and the uploader's own file."""
+    clear_pending()
+    st.session_state.pop(UPLOAD_KEY, None)
 
 
 def _kilobytes(size: int) -> str:
@@ -30,56 +54,99 @@ def _kilobytes(size: int) -> str:
     return f"{max(1, round(size / 1024))} KB"
 
 
+def _summary(record: dict[str, Any] | None) -> str:
+    """The one-line state of the result panel: analysis state, never a placeholder."""
+    if record is None:
+        return "Not analysed yet"
+    outcome = record.get("outcome")
+    if outcome is None or not outcome.ok or outcome.result is None:
+        return "Unavailable"
+    result = outcome.result
+    noun = "detection" if result.count == 1 else "detections"
+    total = record.get("total_ms")
+    summary = f"{result.count} {noun}"
+    if isinstance(total, (int, float)) and total > 0:
+        summary += f" · {format_ms(total)}"
+    return summary
+
+
 def render() -> None:
     inject_theme()
 
-    page_header("Detect", "Upload an image to analyse it.")
-
     spec, model_error = current_model()
 
-    uploaded = st.file_uploader(
-        "Image file",
-        type=list(config.SUPPORTED_IMAGE_TYPES),
-        help=None,
-    )
-
-    if uploaded is None:
-        meta(f"JPG, PNG, WEBP or BMP · up to {config.MAX_UPLOAD_MB} MB")
-        return
-
-    data = uploaded.getvalue()
-    image = decode_image(data)
-    if image is None:
-        note(UNREADABLE_MESSAGE, tone="warn")
-        return
-
-    plate_column, controls_column = st.columns([7, 5], gap="large")
-
-    with plate_column:
-        st.image(image, width="stretch", alt=f"The uploaded image, {uploaded.name}")
-
-    with controls_column:
-        caption_strip(
-            [
-                ("File", uploaded.name),
-                ("Frame", f"{image.width} × {image.height}"),
-                ("Size", _kilobytes(len(data))),
-            ]
+    heading, controls = st.columns([5, 1], gap="small", vertical_alignment="center")
+    with heading:
+        page_header(
+            "Detect",
+            "Choose an image, check the thresholds if you need to, then analyse it.",
         )
-        if spec is None or model_error:
-            # A registry/config problem is a developer concern: the user gets one line.
-            note(UNAVAILABLE_MESSAGE, tone="warn")
-            return
-        confidence, iou = advanced_settings()
+    with controls:
+        confidence, iou = parameters()
 
-    analysis_workspace(
-        namespace="detect_analysis",
-        source="upload",
-        data=data,
-        filename=uploaded.name,
-        image=image,
-        spec=spec,
-        confidence=confidence,
-        iou=iou,
-        button_label="Analyse image",
-    )
+    image_column, result_column = st.columns([1.18, 1], gap="medium", wrap=True)
+
+    filename = "image"
+    model_name = spec.display_name if spec is not None else "model unavailable"
+    record: dict[str, Any] | None = None
+    staged_image = pending_image()
+
+    with image_column:
+        with card(title="Image", note="One image per analysis"):
+            uploaded = st.file_uploader(
+                "Image file",
+                type=list(config.SUPPORTED_IMAGE_TYPES),
+                key=UPLOAD_KEY,
+                label_visibility="collapsed",
+            )
+
+            source: tuple[bytes, str] | None = None
+            if uploaded is not None:
+                source = (uploaded.getvalue(), uploaded.name)
+            elif staged_image is not None:
+                source = staged_image
+
+            if source is None:
+                meta(f"JPG, PNG, WEBP or BMP · up to {config.MAX_UPLOAD_MB} MB")
+                st.page_link(
+                    _page("camera"),
+                    label="Use the camera instead",
+                    icon=":material/photo_camera:",
+                )
+            else:
+                data, filename = source
+                image = decode_image(data)
+                if image is None:
+                    note(UNREADABLE_MESSAGE, tone="warn")
+                else:
+                    st.image(image, width="stretch", alt=f"The image to analyse, {filename}")
+                    meta(
+                        f"{image_facts(image, filename)} · {_kilobytes(len(data))}",
+                        mono=True,
+                    )
+                    if spec is None or model_error:
+                        # A registry/config problem is a developer concern: the user
+                        # gets one line, and no button that cannot work.
+                        note(UNAVAILABLE_MESSAGE, tone="warn")
+                    else:
+                        record = analyse_controls(
+                            namespace=NAMESPACE,
+                            source="upload",
+                            image=image,
+                            filename=filename,
+                            data_length=len(data),
+                            spec=spec,
+                            confidence=confidence,
+                            iou=iou,
+                        )
+                    if uploaded is None and staged_image is not None:
+                        st.button(
+                            "Clear image",
+                            type="tertiary",
+                            on_click=_clear_source,
+                            help="Remove the image staged on Home",
+                        )
+
+    with result_column:
+        with card(title="Results", note=_summary(record)):
+            render_result_panel(record=record, filename=filename, model_name=model_name)

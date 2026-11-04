@@ -4,6 +4,15 @@
 readout for detection results only.* Implementation notes and the review outcome are in
 **§8 Pass 3** at the end of this document.
 
+> **Superseded in Phase 5.** §1–§8 describe the proof-sheet interface that shipped in
+> Phases 1–4. Phase 5 replaced its *structure* with an application frame: a dark
+> navigation rail, a light workspace, cards, semantic colour roles and a detection list.
+> The research, the measured audit and the architecture decision are in
+> [`PHASE5_REFERENCE_REDESIGN.md`](PHASE5_REFERENCE_REDESIGN.md); the rules that no longer
+> apply are listed in **§9**. Paper, crop marks and editorial treatments are no longer
+> part of the interface; the warm canvas, the ochre marking colour and the monospace data
+> voice are what survived.
+
 Method note: there is no `frontend-design` skill installed in this sandbox. I searched the
 whole filesystem (`find / -iname "SKILL.md"`, plus a directory sweep) and the only design
 skill present is Streamlit's own `developing-with-streamlit`
@@ -398,3 +407,45 @@ No browser exists in this environment, so the rendered result has not been seen:
 verified numerically and against the installed Streamlit source, layout is verified through
 `AppTest` and CSS breakpoints, and the dropzone's painted appearance on a real display still
 needs a human check.
+
+---
+
+## 9. Phase 5 — what supersedes §1–§8
+
+Approved in Phase 5 and implemented in Stage 0–1. Where this section contradicts an
+earlier rule, this section wins.
+
+**Superseded**
+
+| Earlier rule | Now |
+|---|---|
+| "A proof sheet, not a dashboard"; no cards | Bordered cards hold every task surface (`st.container(border=True)`), with an 8px radius |
+| "Avoid cards, icons and surfaces" | Icons are used where a destination or action needs one, from Material Symbols Rounded only |
+| Corners are 2px; type scale is nine steps | Radii are 8px (cards) and 6px (controls); type is seven steps: 0.72 / 0.78 / 0.84 / 0.88 / 0.94 / 1.06 / 1.375 rem |
+| Spacing scale 4–96px (`--jd-1`…`--jd-9`) | Spacing scale 4/8/12/16/24/32/48px (`--jd-1`…`--jd-7`) |
+| Plates, caption strips, crop marks, flow rules, footers | Page header, card, card header, fact strip, detection list, empty state, note, steps, bullets, readout, specimen |
+| Home mounts the specimen twice with a primary CTA button | Home is an entry point: the upload control is the primary action and hands off to Detect without inferring; one small captioned plate remains |
+| Filters/panel colour: white only | Three surfaces are allowed: canvas `#F4F2ED`, cards `#FFFFFF`, rail `#1E2122` |
+| Ochre only in the primary action, focus and annotations | Ochre also draws the 2px active rule in the rail; it still never fills a panel, badge or tinted section |
+
+**Retained**
+
+- Ochre `#8A5A00` remains the only accent, and remains numerically distant from every
+  colour the detector draws with.
+- No gradients, filters, text shadows, keyframes, transforms or transitions; the only
+  `box-shadow` is the focus ring.
+- Monospace for data only; prose stays sans.
+- The uploader keeps a white surface derived from `secondaryBackgroundColor`, an ink-2
+  dashed frame and all four interaction states.
+- Honesty rules: no invented metrics, explicit *Analyse image*, timings shown only when
+  measured (`<1 ms` rather than `0 ms`), and honest unavailable states.
+
+**Added**
+
+- Contrast is now asserted for the dark rail as well as the light workspace, including
+  the active destination, whose ochre indicator is a rule rather than a fill.
+- The active rail item is themed natively through `[theme.sidebar]` in
+  `.streamlit/config.toml`, plus one CSS rule for the active indicator — no
+  high-specificity repainting of Streamlit internals.
+- `app/ui/components.py` primitives carry no logic; every number they render is passed in
+  from a measurement.

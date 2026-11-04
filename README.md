@@ -94,45 +94,46 @@ Full procedure and troubleshooting: [`docs/MODEL_INTEGRATION.md`](docs/MODEL_INT
 
 ## Application sections
 
-The application opens on **Home**, which shows the product's subject rather than a
-pitch: the same specimen mounted twice, once as captured and once with the marking the
-model draws, captioned as an illustration.
+The application opens on **Home**, an entry point built around one real control:
+choosing a file stages it for Detect. It does not run the model. Analysis only ever
+starts from the explicit *Analyse image* action.
 
 | Page | Purpose |
 |---|---|
-| **Home** (default) | One headline, one sentence, one primary action (*Analyse an image*) with a secondary camera link, the same specimen mounted twice (*Original* / *Annotated*) and captioned "Illustration, not an actual detection result.", the flow as four stations on one rule, and a privacy footer |
-| **Detect** | Upload an image (mounted and captioned with file name, frame and size) → *Analyse image* → a fixed-column readout (count, mean confidence, confidence range, applied thresholds), the original and annotated prints, and the annotated-image download. Thresholds sit in a collapsed **Advanced settings** panel. |
-| **Camera** | Browser snapshot → the same pipeline, one still frame per capture (no live video) |
+| **Home** (default) | The upload control (selecting a file opens Detect with it ready, without analysing it), a camera link, this session's real counts once they exist, a compact three-step account of the flow, and one small captioned specimen plate |
+| **Detect** | Image on the left (upload, preview, file facts, *Analyse image*), results on the right (*Results* / *Details* / *JSON*), thresholds behind one **Params** popover |
+| **Camera** | Browser snapshot → the same pipeline and the same two-panel workspace, one still frame per capture (no live video) |
 | **Help** | How it works, what the numbers mean, privacy, honest limitations |
 | **Developer** (`/developer`, hidden) | Model resolution, weights paths, runtime availability, setup commands, dataset composition, recorded evaluation metrics, session activity |
 
 ### Interface
 
-The interface is a **proof sheet**, not a dashboard, and it is one shared stylesheet
-rather than per-page styling:
+The interface is an **application frame**, not a dashboard: a dark navigation rail
+around a light analysis workspace, with work happening in bordered cards.
 
-- `app/ui/theme.py` — design tokens and one stylesheet. Sheet `#F4F2ED`, mounts
-  `#FFFFFF`, ink `#16181A`, secondary ink `#52585C`, hairlines `#D0CBC1`, and one
-  marking colour, ochre `#8A5A00`, which may fill an action, underline the active
-  navigation entry, draw a focus ring or outline a detection — never a panel, badge
-  or tinted section. Spacing is a 4px scale (`--jd-1` … `--jd-9`, 4–96 px), corners
-  are 2px, and effects are limited to focus rings.
-- `app/ui/components.py` — the primitives: page head, section, mounted plate,
-  caption strip, fixed-column readout, flow rule, note, empty state, steps, bullets
-  and footer. Monospace is reserved for facts (file name, frame, size, counts,
-  confidences, thresholds); prose is never set in it.
+- `app/ui/theme.py` — design tokens and one stylesheet. Canvas `#F4F2ED`, cards
+  `#FFFFFF`, rail `#1E2122`, ink `#16181A`, secondary ink `#52585C`, rules `#D0CBC1`,
+  and one marking colour, ochre `#8A5A00`, which may fill the primary action, draw the
+  2px active rule in the rail, draw a focus ring or outline a detection — never a
+  panel, badge or tinted section. Radii are two steps (8px cards, 6px controls),
+  spacing is a 4px scale, and effects are limited to focus rings.
+- `app/ui/components.py` — the primitives: page header, card and card header, fact
+  strip, detection list, empty state, note, steps, bullets, readout and the specimen
+  plate. Monospace is reserved for data (counts, confidences, timings, thresholds,
+  coordinates); prose is never set in it.
 - `.streamlit/config.toml` — the same tokens where Streamlit can apply them itself
-  (colours, 2px radii, 15px base size, sans/mono roles), so native widgets inherit
-  the language instead of being overridden.
-- `app/ui/nav.py` — the four consumer destinations via Streamlit's own
-  `st.navigation`.
+  (colours, radii, 14px base size, the graphite sidebar), so native cards, buttons,
+  tabs and inputs inherit the language instead of being repainted.
+- `app/ui/nav.py` — Home, plus grouped *Workspace* (Detect, Camera) and *Guidance*
+  (Help) destinations via Streamlit's own `st.navigation`.
 
-Icons appear in exactly one place: the four navigation entries, because
-`st.Page(icon=...)` accepts only an emoji or `:material/name:` and the drawer is
-where a glyph earns its keep. Page content uses type, alignment and hairlines
-instead, so there is no icon set to keep consistent. Replacing the native
-navigation with hand-written links would cost URL routing, keyboard support and the
-mobile drawer.
+Icons are one family only — **Material Symbols Rounded**, which `st.Page(icon=...)`,
+`st.button(icon=...)` and `st.popover(icon=...)` render natively. There are no
+hand-drawn interface glyphs, and no second icon set anywhere.
+
+The rail carries the wordmark, the destinations, genuine model state (read from the
+registry; it never loads weights) and one privacy line. There is no account, avatar or
+workspace switcher, because the application has none.
 
 The interface is split by audience. End users only ever see the workflow: no weights
 paths, dependency names, registry vocabulary, dataset statistics or evaluation

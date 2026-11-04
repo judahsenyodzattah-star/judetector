@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="JUDEtector">
-  <rect width="64" height="64" rx="2" fill="#16181A"/>
-  <g fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="square">
+  <rect width="64" height="64" rx="10" fill="#FFFFFF"/>
+  <g fill="none" stroke="#1E2122" stroke-width="3" stroke-linecap="square">
     <path d="M16 24v-8h8"/>
     <path d="M40 16h8v8"/>
     <path d="M48 40v8h-8"/>

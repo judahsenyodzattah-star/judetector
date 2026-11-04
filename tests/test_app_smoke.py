@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from app.components.results import readout_fields
+from app.components.results import format_ms, readout_fields
 from app.core import config
 
 pytestmark = pytest.mark.ui
@@ -150,21 +150,24 @@ def _run_main() -> AppTest:
 def test_main_entry_point_opens_the_landing_page():
     at = _run_main()
     text = _page_text(at)
-    assert "See exactly what the model sees." in text
-    assert "Upload an image or take a snapshot" in text
+    assert "Analyse an image" in text
+    assert "Upload a photo or take a snapshot" in text
+    # The entry point is a working control, not a call-to-action button.
+    assert len(at.file_uploader) == 1
 
 
 # --------------------------------------------------------------------------
 # Landing page
 # --------------------------------------------------------------------------
-def test_home_is_one_headline_one_sentence_one_action(tmp_path):
+def test_home_opens_with_the_upload_control(tmp_path):
+    """The primary action on Home is the control itself, not a button to a page."""
     at = _run_page(tmp_path, "home")
+    assert len(at.file_uploader) == 1
+    assert at.file_uploader[0].label == "Image file"
+    assert [button.label for button in at.button] == []
     text = _page_text(at)
-    assert "See exactly what the model sees." in text
-    assert "Upload an image or take a snapshot" in text
-    # Exactly one button, and it is the primary action.
-    assert [button.label for button in at.button] == ["Analyse an image"]
-    assert at.button[0].proto.type == "primary"
+    assert "Analyse an image" in text
+    assert "Upload a photo or take a snapshot" in text
 
 
 def test_home_has_no_marketing_scaffolding(tmp_path):
@@ -186,42 +189,46 @@ def test_home_has_no_marketing_scaffolding(tmp_path):
         "effortless",
     ):
         assert phrase not in lowered, f"marketing phrase on Home: {phrase!r}"
-    # One primary action, not a pair of competing CTAs, and no emoji headings.
-    assert len(at.button) == 1
+    # No competing CTAs and no emoji headings.
+    assert not [button for button in at.button if button.proto.type == "primary"]
     assert not re.search(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]", visible)
 
 
-def test_home_illustration_is_declared_as_an_illustration(tmp_path):
+def test_home_session_panel_starts_empty_and_invents_nothing(tmp_path):
+    """A new session shows an empty state, never a zeroed score board."""
     at = _run_page(tmp_path, "home")
-    captions = _texts(at.caption)
-    assert "Illustration, not an actual detection result." in captions
-    # No invented scores, counts, timings or percentages anywhere on the page.
-    visible = _visible_text(at) + " " + captions
+    visible = _visible_text(at)
+    assert "No analyses yet" in visible
+    # No invented percentages, counts or timings, and no measured tiles.
     assert "%" not in visible
     assert not re.search(r"\d+(\.\d+)?\s*(ms|fps|faces?|detections?)\b", visible, re.I)
-    lowered = visible.lower()
-    assert "confidence" not in re.sub(r"confidence score", "", lowered)
+    assert not at.metric
+    # No score, count or timing is displayed anywhere in the empty state.
+    assert not re.search(r"\b\d+(\.\d+)?\s*%", visible)
+    assert "mean confidence" not in visible.lower()
 
 
-def test_home_states_the_flow_once(tmp_path):
+def test_home_states_the_flow_in_three_steps(tmp_path):
     at = _run_page(tmp_path, "home")
     text = _page_text(at)
-    for station in ("Upload or capture", "Analyse", "Review", "Download"):
+    assert "How it works" in text
+    assert text.count("How it works") == 1
+    for station in ("Choose an image", "Analyse", "Review and download"):
         assert station in text
-    assert "How it works" not in text
 
 
-def test_home_mounts_the_specimen_twice(tmp_path):
-    """Original and annotated, labelled, in that order."""
+def test_home_shows_one_secondary_specimen(tmp_path):
+    """One small plate, captioned as an illustration, after the work surface."""
     at = _run_page(tmp_path, "home")
     text = _page_text(at)
-    assert text.count("jd-plate\"") == 2
-    assert "Original" in text and "Annotated" in text
-    assert text.index(">Original<") < text.index(">Annotated<")
+    assert text.count('class="jd-specimen"') == 1
+    assert "Illustration." in text
+    # It follows the upload card, so it can never be mistaken for the entry point.
+    assert text.index("Start an analysis") < text.index('class="jd-specimen"')
 
 
-def test_home_plates_differ_only_by_the_marking():
-    """The annotated plate is the same specimen plus one marking rectangle.
+def test_home_specimen_is_unchanged_apart_from_the_marking():
+    """The annotated specimen is the same drawing plus one marking rectangle.
 
     This is the promise the caption makes, so it is asserted on the artwork rather
     than trusted: strip the marking and the two drawings must be identical, and the
@@ -243,13 +250,42 @@ def test_home_plates_differ_only_by_the_marking():
     assert not re.search(r"\\d", original + annotated)
 
 
-def test_home_footer_has_brand_privacy_and_help_link(tmp_path):
+def test_home_stages_an_image_without_analysing_it(tmp_path, png_bytes):
+    """Choosing a file prepares Detect; it must not run the model."""
     at = _run_page(tmp_path, "home")
+    at.file_uploader[0].upload("sample.png", png_bytes, "image/png").run()
+    assert not at.exception, at.exception
+
+    staged = at.session_state.get("pending_image")
+    assert staged and staged["filename"] == "sample.png"
+    assert staged["data"] == png_bytes
+    # Nothing was analysed: no stored outcome and no session activity.
+    assert at.session_state.get("detect_analysis") is None
+    assert not at.session_state.get("detection_runs")
+
+
+def test_detect_opens_the_image_staged_on_home(tmp_path, png_bytes):
+    """The handoff lands with the image ready and the explicit action available."""
+    at = _run_page(tmp_path, "detect")
+    at.session_state["pending_image"] = {"data": png_bytes, "filename": "sample.png"}
+    at.run()
+    assert not at.exception, at.exception
+
     text = _page_text(at)
-    assert "JUDEtector" in text
-    assert "never stored" in text
-    assert "Detection is not recognition" in text
-    assert [link.label for link in at.get("page_link")] == ["Use the camera instead", "Help"]
+    assert "sample.png" in text
+    assert "Analyse image" in [button.label for button in at.button]
+    # Ready, not analysed: the result panel still asks for an analysis.
+    assert "Prediction results will appear here" in text
+    assert not at.metric
+
+
+def test_privacy_and_scope_are_stated_where_they_belong(tmp_path):
+    at = _run_main()
+    rail = _texts(at.sidebar.markdown) + " " + _texts(at.sidebar.caption)
+    assert "never stored" in rail
+
+    help_page = _page_text(_run_page(tmp_path, "help"))
+    assert "Detection is not recognition" in help_page
 
 
 def test_help_page_explains_the_flow_in_three_steps(tmp_path):
@@ -258,26 +294,6 @@ def test_help_page_explains_the_flow_in_three_steps(tmp_path):
     for title in ("Upload or capture", "Analyse", "Review and download"):
         assert title in text
     assert "How it works" in text
-
-
-def test_primary_action_navigates_to_detect():
-    """Clicking the landing action in the running app must land on Detect."""
-    at = _run_main()
-    labels = [button.label for button in at.button]
-    assert "Analyse an image" in labels
-
-    at.button[labels.index("Analyse an image")].click().run()
-    assert not at.exception, at.exception
-    assert at.file_uploader, "'Analyse an image' did not land on a page with an uploader"
-    assert "See exactly what the model sees." not in _page_text(at)
-
-
-def test_sidebar_carries_no_model_diagnostics():
-    at = AppTest.from_file(str(MAIN_SCRIPT), default_timeout=TIMEOUT)
-    at.run()
-    sidebar = _texts(at.sidebar.markdown).lower()
-    for term in ("weights", "judah", "model", "registry", "ultralytics"):
-        assert term not in sidebar, f"'{term}' leaked into the sidebar"
 
 
 # --------------------------------------------------------------------------
@@ -302,12 +318,12 @@ def test_detect_offers_an_upload_control_and_no_technical_detail(tmp_path):
     at = _run_page(tmp_path, "detect")
     assert len(at.file_uploader) == 1
     assert at.file_uploader[0].label == "Image file"
-    # Secondary controls stay out of the way until an image exists.
+    # Settings live behind one Params popover, never as a visible panel.
     assert len(at.get("expander")) == 0
     text = _interactive_text(at)
     for term in TECHNICAL_TERMS:
         assert term not in text, f"'{term}' appears in the user-facing Detect page"
-    assert "upload" in text
+    assert "choose an image" in text
 
 
 def test_detect_explains_accepted_files_and_size_limit(tmp_path):
@@ -316,19 +332,37 @@ def test_detect_explains_accepted_files_and_size_limit(tmp_path):
     assert "25 MB" in text
 
 
-def test_detect_moves_thresholds_into_a_collapsed_advanced_panel(tmp_path, png_bytes):
+def test_detect_keeps_thresholds_behind_a_params_popover(tmp_path, png_bytes):
+    """Two sliders, one popover, no panel competing with the workflow."""
     at = _run_page(tmp_path, "detect")
-    # Nothing to configure until there is an image to analyse.
     assert len(at.get("expander")) == 0
-
-    at.file_uploader[0].upload("sample.png", png_bytes, "image/png").run()
-    expanders = list(at.expander)
-    assert len(expanders) == 1
-    assert expanders[0].label == "Advanced settings"
-    assert expanders[0].proto.expanded is False
     labels = [slider.label for slider in at.slider]
     assert "Confidence threshold" in labels
     assert any("IoU" in label for label in labels)
+    assert [slider.value for slider in at.slider] == [config.DEFAULT_CONFIDENCE, config.DEFAULT_IOU]
+
+    at.file_uploader[0].upload("sample.png", png_bytes, "image/png").run()
+    popovers = at.get("popover")
+    assert len(popovers) == 1
+    assert "Applies to your next analysis." in _texts(at.caption)
+    # Uploading alone still analyses nothing.
+    assert not at.session_state.get("detect_analysis")
+
+
+def test_changing_thresholds_never_runs_inference(tmp_path, monkeypatch, png_bytes):
+    """The explicit-action guarantee: only the Analyse button may call the model."""
+    weights = tmp_path / "best.pt"
+    weights.write_bytes(b"stub")
+    monkeypatch.setenv(config.ENV_REGISTRY_PATH, str(_write_single_model_registry(tmp_path, weights)))
+    fake = _install_fake_model(monkeypatch, [(10, 10, 60, 60, 0.8, 0)])
+
+    at = _run_page(tmp_path, "detect")
+    at.file_uploader[0].upload("sample.png", png_bytes, "image/png").run()
+    assert not fake.calls
+
+    at.slider[0].set_value(0.5).run()
+    assert not fake.calls, "a slider change ran the model"
+    assert not at.session_state.get("detect_analysis")
 
 
 # --------------------------------------------------------------------------
@@ -390,15 +424,18 @@ def test_detect_runs_end_to_end_and_reports_real_scores(tmp_path, monkeypatch, p
     at.file_uploader[0].upload("sample.png", png_bytes, "image/png").run()
     assert not at.exception, at.exception
 
-    # Nothing is analysed until the user asks for it.
+    # Nothing is analysed until the user asks for it, and the panel says so.
     labels = [button.label for button in at.button]
     assert "Analyse image" in labels
     assert not at.metric
+    assert "Prediction results will appear here" in _page_text(at)
+    pre_analysis_images = len(at.get("image"))
 
-    at.button[0].click().run()
+    at.button[labels.index("Analyse image")].click().run()
     assert not at.exception, at.exception
 
-    result = at.session_state["detect_analysis"]["outcome"].result
+    record = at.session_state["detect_analysis"]
+    result = record["outcome"].result
     assert readout_fields(result) == [
         ("Detections", "2"),
         ("Mean confidence", "76.5%"),  # (0.91 + 0.62) / 2
@@ -407,17 +444,39 @@ def test_detect_runs_end_to_end_and_reports_real_scores(tmp_path, monkeypatch, p
         ("Overlap", "0.45"),
     ]
 
-    # The same values are on screen, in the fixed-column readout.
     text = _page_text(at)
-    for label, value in readout_fields(result):
-        assert label in text and value in text
+    # The results panel leads with the measured summary, not a score board.
+    assert "2 detections found" in text
 
-    # Preview, original and annotated images are all displayed.
-    assert len(at.get("image")) == 3
+    # Every measured value is on screen, as fact tiles in the Details tab.
+    tiles = [(metric.label, metric.value) for metric in at.metric]
+    assert ("Detections", "2") in tiles
+    assert ("Mean confidence", "76.5%") in tiles
+    assert ("Inference", format_ms(result.inference_ms)) in tiles
+    assert ("Total", format_ms(record["total_ms"])) in tiles
+    # Thresholds and the applied settings are stated in plain text too.
+    assert "Threshold 0.25" in text and "overlap 0.45" in text
+
+    # One row per detection, colour-linked to the overlay, with its confidence.
+    assert text.count('class="jd-det"') == 2
+    for row in result.records():
+        assert row["label"] in text
+        assert f"{row['confidence']:.1%}" in text
+
+    # Timings are measured around the real call and shown only when present.
+    assert record["total_ms"] > 0
+    assert format_ms(record["total_ms"]) in text
+
+    # Preview + annotated result + the source image kept in Details.
+    assert len(at.get("image")) == pre_analysis_images + 2
     assert len(at.get("download_button")) == 1
+    assert [tab.label for tab in at.tabs] == ["Results", "Details", "JSON"]
 
-    # Coordinates and timings stay in the collapsed detail section.
-    assert "Detection details" in [expander.label for expander in at.expander]
+    # The JSON tab carries the records the model produced, unmodified.
+    payload = at.json[0].value
+    payload = json.loads(payload) if isinstance(payload, str) else payload
+    assert payload["detections"] == result.records()
+    assert payload["model"] == "Fixture model"
 
     recorded = at.session_state.get("detection_runs")
     assert recorded and recorded[0]["face_count"] == 2

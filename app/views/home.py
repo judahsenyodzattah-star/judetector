@@ -1,31 +1,27 @@
-"""Home — the proof sheet, and the default route.
+"""Home — the application entry point and default route.
 
-Composition rather than effects: a headline, one supporting sentence, one primary
-action, then the same specimen mounted twice — once as captured, once with the
-marking the model would draw. The pair is the product's subject, so it is the
-primary visual element of the page.
+The page answers one question — *how do I analyse an image?* — with a real control, not
+a link disguised as marketing: choosing a file stages it and opens Detect, where the
+explicit *Analyse image* action lives. Nothing is inferred here.
 
-Both plates are drawn from the same markup; the annotated plate differs only by the
-single marking rectangle. Nothing on this page is a measurement, and the caption
-says so.
+Around that: this session's real numbers (only once they exist), a compact account of
+the three steps, and one small specimen plate that shows what a detection looks like.
+The plate is secondary by design and captioned as an illustration.
 """
 
 from __future__ import annotations
 
 import streamlit as st
 
-from app.ui.components import display_headline, flow_line, footer, plate
+from app.components.workflow import remember_pending
+from app.core import config
+from app.core.stats import get_runs, summarise
+from app.ui.components import card, empty_state, fact_strip, meta, page_header, specimen, steps
 from app.ui.theme import PALETTE, inject_theme
 
 __all__ = ["render", "specimen_svg"]
 
-HEADLINE = "See exactly what the model sees."
-INTRO = (
-    "Upload an image or take a snapshot, and the annotated copy comes back with the "
-    "detection count and a confidence score for each match."
-)
-FLOW = ("Upload or capture", "Analyse", "Review", "Download")
-ILLUSTRATION_NOTE = "Illustration, not an actual detection result."
+HOME_UPLOAD_KEY = "home_upload"
 
 _PLATE_WIDTH = 320
 _PLATE_HEIGHT = 200
@@ -38,33 +34,90 @@ def _page(key: str):
     return page_for(key)
 
 
+def _handoff() -> None:
+    """Callback: stage the chosen file for Detect and open it.
+
+    Runs before the page renders, so Detect receives the image already in place. It
+    stores bytes only — it never runs the model.
+    """
+    uploaded = st.session_state.get(HOME_UPLOAD_KEY)
+    if uploaded is None:
+        return
+    remember_pending(uploaded.getvalue(), uploaded.name)
+    st.switch_page(_page("detect"))
+
+
 def render() -> None:
     inject_theme()
 
-    display_headline(HEADLINE, INTRO)
-
-    action_column, link_column, _ = st.columns([1, 1, 1.4], vertical_alignment="center")
-    with action_column:
-        if st.button("Analyse an image", type="primary"):
-            st.switch_page(_page("detect"))
-    with link_column:
-        st.page_link(_page("camera"), label="Use the camera instead", icon=None)
-
-    original_column, annotated_column = st.columns(2, gap="medium")
-    with original_column:
-        plate(specimen_svg(annotated=False), label="Original")
-    with annotated_column:
-        plate(specimen_svg(annotated=True), label="Annotated")
-
-    st.caption(ILLUSTRATION_NOTE)
-
-    flow_line(FLOW)
-
-    footer(
-        "Images are processed in memory and never stored. Detection is not recognition.",
-        page=_page("help"),
-        page_label="Help",
+    page_header(
+        "Analyse an image",
+        "Upload a photo or take a snapshot. JUDEtector marks what the model finds and "
+        "reports the confidence for each detection.",
     )
+
+    main_column, side_column = st.columns([1.55, 1], gap="medium", wrap=True)
+
+    with main_column:
+        with card(title="Start an analysis"):
+            st.file_uploader(
+                "Image file",
+                type=list(config.SUPPORTED_IMAGE_TYPES),
+                key=HOME_UPLOAD_KEY,
+                on_change=_handoff,
+                label_visibility="collapsed",
+            )
+            meta(
+                f"JPG, PNG, WEBP or BMP · up to {config.MAX_UPLOAD_MB} MB. Choosing a file "
+                "opens Detect with the image ready; analysis starts when you ask for it."
+            )
+            st.page_link(
+                _page("camera"),
+                label="Or take a snapshot with the camera",
+                icon=":material/photo_camera:",
+            )
+
+        with card(title="How it works"):
+            steps(
+                [
+                    ("Choose an image", "Upload a file here, or capture a frame on Camera."),
+                    ("Analyse", "Review the thresholds, then select Analyse image."),
+                    (
+                        "Review and download",
+                        "Check the marked image and each confidence, then download the PNG.",
+                    ),
+                ]
+            )
+
+    with side_column:
+        _session_card()
+        specimen(
+            annotated=True,
+            label="Illustration. Each outline marks one detection; the model reports "
+            "its own count and confidences.",
+        )
+
+
+def _session_card() -> None:
+    """Session figures, shown only for analyses that actually ran."""
+    runs = get_runs(st.session_state)
+    with card(title="This session"):
+        if not runs:
+            empty_state(
+                title="No analyses yet",
+                body="Counts and confidences from the analyses you run will be summarised here.",
+            )
+            return
+
+        summary = summarise(runs)
+        items = [
+            ("Analyses", str(summary.total_runs)),
+            ("Detections", str(summary.total_faces)),
+        ]
+        if summary.mean_confidence is not None:
+            items.append(("Mean confidence", f"{summary.mean_confidence:.1%}"))
+        fact_strip(items)
+        meta("Recorded in this browser session only.")
 
 
 def specimen_svg(*, annotated: bool) -> str:
